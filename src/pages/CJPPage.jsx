@@ -25,6 +25,7 @@ import PasswordGate from '../components/PasswordGate';
 // ── E Skor Hesaplama (FIG kuralı — HTML cjp.html ile birebir aynı) ───────
 // Her element için 6 hakemden en yüksek 2 + en düşük 2 kesilir, kalan toplanır.
 // Landing ayrıca aynı şekilde kesilir.
+// Not: JudgeCockpitPage `deductions` alanı olarak yazar (HTML ile uyumlu).
 function calcEScore(judgesData, elementCount = 10) {
     const base = elementCount * 2;
 
@@ -46,15 +47,20 @@ function calcEScore(judgesData, elementCount = 10) {
     let totalDeduction = 0;
 
     // Her element için per-element trimming
+    // Alan adı: `deductions` (HTML CJP ile uyumlu, eski `scores` değil)
     for (let elIdx = 0; elIdx < elementCount; elIdx++) {
-        const deductions = [];
+        const elDeducts = [];
         for (let j = 1; j <= 6; j++) {
             const jData = judgesData[`e${j}`];
-            if (jData && jData.scores && jData.scores[elIdx] !== undefined) {
-                deductions.push(parseFloat(jData.scores[elIdx]) || 0);
+            if (jData) {
+                // `deductions` önce, geriye dönük uyumluluk için `scores` de dene
+                const arr = jData.deductions || jData.scores;
+                if (arr && arr[elIdx] !== undefined) {
+                    elDeducts.push(parseFloat(arr[elIdx]) || 0);
+                }
             }
         }
-        totalDeduction += trimDeductions(deductions);
+        totalDeduction += trimDeductions(elDeducts);
     }
 
     // Landing trimming
@@ -70,9 +76,10 @@ function calcEScore(judgesData, elementCount = 10) {
     return Math.max(0, base - totalDeduction);
 }
 
-// ── D Skor (D hakeminden okur, yoksa 0) ──────────────────────────────────
+// ── D Skor (D hakeminden okur — key: 'd', alan: 'val') ───────────────────
+// Not: HTML CJP judges['d'].val formatı. JudgeCockpitPage de 'd' key + val yazar.
 function getDScoreFromJudge(judgesData) {
-    const dJudge = judgesData?.d1;
+    const dJudge = judgesData?.d;
     if (dJudge && dJudge.val !== undefined && dJudge.val !== '') {
         return parseFloat(dJudge.val) || 0;
     }
@@ -615,7 +622,7 @@ export default function CJPPage() {
                                 {['e1','e2','e3','e4','e5','e6'].map(jId => {
                                     const j = judgesData[jId];
                                     const submitted = j?.submitted === true;
-                                    const hasData   = j && j.scores;
+                                    const hasData   = j && (j.deductions || j.scores);
                                     const color = submitted ? '#10b981' : hasData ? '#eab308' : 'rgba(255,255,255,0.1)';
                                     return (
                                         <div key={jId} title={jId.toUpperCase()} style={{
