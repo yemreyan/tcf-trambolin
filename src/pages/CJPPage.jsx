@@ -15,34 +15,68 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ref, onValue, get, remove } from 'firebase/database';
+import { ref, onValue, get, set, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { DataService } from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import PasswordGate from '../components/PasswordGate';
 
-// ── Sabit: E skor hesaplama ───────────────────────────────────────────────
-// 6 hakemden en yüksek ve en düşük atılır, 4 orta değer toplanır
+// ── E Skor Hesaplama (FIG kuralı — HTML cjp.html ile birebir aynı) ───────
+// Her element için 6 hakemden en yüksek 2 + en düşük 2 kesilir, kalan toplanır.
+// Landing ayrıca aynı şekilde kesilir.
 function calcEScore(judgesData, elementCount = 10) {
-    const base = elementCount * 2; // Her hareket = 2 puan başlangıç
-    const allDeducts = Object.values(judgesData || {})
-        .filter(j => j && j.scores)
-        .map(j => {
-            const total = (j.scores || []).reduce((a, b) => a + Number(b), 0) + Number(j.landing || 0);
-            return total;
-        });
+    const base = elementCount * 2;
 
-    if (allDeducts.length === 0) return 0;
-
-    let sum = allDeducts.reduce((a, b) => a + b, 0);
-    if (allDeducts.length >= 4) {
-        sum -= Math.max(...allDeducts) + Math.min(...allDeducts);
-        sum = sum / (allDeducts.length - 2);
-    } else {
-        sum = sum / allDeducts.length;
+    function trimDeductions(arr) {
+        if (arr.length >= 6) {
+            arr.sort((a, b) => a - b);
+            arr.pop(); arr.pop();     // 2 yüksek
+            arr.shift(); arr.shift(); // 2 düşük
+        } else if (arr.length >= 4) {
+            arr.sort((a, b) => a - b);
+            arr.pop();
+            if (arr.length > 2) arr.pop();
+            arr.shift();
+            if (arr.length > 2) arr.shift();
+        }
+        return arr.reduce((a, b) => a + b, 0);
     }
-    return Math.max(0, base - sum);
+
+    let totalDeduction = 0;
+
+    // Her element için per-element trimming
+    for (let elIdx = 0; elIdx < elementCount; elIdx++) {
+        const deductions = [];
+        for (let j = 1; j <= 6; j++) {
+            const jData = judgesData[`e${j}`];
+            if (jData && jData.scores && jData.scores[elIdx] !== undefined) {
+                deductions.push(parseFloat(jData.scores[elIdx]) || 0);
+            }
+        }
+        totalDeduction += trimDeductions(deductions);
+    }
+
+    // Landing trimming
+    const landingArr = [];
+    for (let j = 1; j <= 6; j++) {
+        const jData = judgesData[`e${j}`];
+        if (jData && jData.landing !== undefined && jData.landing !== null && jData.landing !== '') {
+            landingArr.push(parseFloat(jData.landing) || 0);
+        }
+    }
+    totalDeduction += trimDeductions(landingArr);
+
+    return Math.max(0, base - totalDeduction);
+}
+
+// ── D Skor (D hakeminden okur, yoksa 0) ──────────────────────────────────
+function getDScoreFromJudge(judgesData) {
+    const dJudge = judgesData?.d1;
+    if (dJudge && dJudge.val !== undefined && dJudge.val !== '') {
+        return parseFloat(dJudge.val) || 0;
+    }
+    return null; // null = judge verisi yok, manuel giriş kullanılır
 }
 
 export default function CJPPage() {
@@ -91,26 +125,21 @@ export default function CJPPage() {
     const dsRef = useRef(null);
     const unsubRefs = useRef([]);
 
+    // D input için state — D hakeminden gelmezse manuel girilebilir
+    const [dInput, setDInput] = useState('');
+
     // ── Hesaplanan değerler ───────────────────────────────────────────────
     const eScore = calcEScore(judgesData, elementCount);
-    const dScore = parseFloat(inpD(judgesData)) || 0;
 
-    function inpD(jd) {
-        // D skoru, judge-d'nin gönderdiği veriden alınır (ileride)
-        // Şimdilik sadece manuel input olarak dönelim
-        return 0;
-    }
+    // D: önce D hakeminden oku, yoksa manuel girişi kullan
+    const dFromJudge = getDScoreFromJudge(judgesData);
+    const dVal = dFromJudge !== null ? dFromJudge : (parseFloat(dInput) || 0);
 
-    const tVal   = parseFloat(inpT) || 0;
-    const hVal   = parseFloat(inpH) || 0;
-    const sVal   = parseFloat(inpS) || 0;
-    const pVal   = parseFloat(inpP) || 0;
-    const dpVal  = parseFloat(inpDp) || 0;
-    const dManual = parseFloat(inpT) || 0; // D hakemin girdiği — ayrı state ile yönetilecek
-
-    // D input için ayrı state
-    const [dInput, setDInput] = useState('');
-    const dVal = parseFloat(dInput) || 0;
+    const tVal  = parseFloat(inpT)  || 0;
+    const hVal  = parseFloat(inpH)  || 0;
+    const sVal  = parseFloat(inpS)  || 0;
+    const pVal  = parseFloat(inpP)  || 0;
+    const dpVal = parseFloat(inpDp) || 0;
 
     // Total = D + E + T - H - S - P - DP
     const totalScore = Math.max(0,
@@ -279,6 +308,29 @@ export default function CJPPage() {
             elementCount,
         });
     }
+
+    // ── Canlı Önizleme — Scoreboard'a anlık yaz (HTML calcWithoutSave eşleniği) ──
+    // Hakem verisi veya CJP inputları değişince panele isLive:true yazar
+    useEffect(() => {
+        if (!selected || !compId || isLocked) return;
+        const hasStarted =
+            Object.keys(judgesData).length > 0 ||
+            dVal > 0 || tVal > 0 || hVal > 0 || sVal > 0 || pVal > 0 || dpVal > 0 || currentStatus;
+        if (!hasStarted) return;
+
+        const previewData = {
+            isLive: true,
+            athleteId: selected.uniqueId,
+            routine: activeRoutine,
+            panel: currentPanel,
+            e: parseFloat(eScore.toFixed(2)),
+            d: dVal,
+            t: tVal, h: hVal, s: sVal, p: pVal, dp: dpVal,
+            total: parseFloat(totalScore.toFixed(3)),
+            status: currentStatus || null,
+        };
+        set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), previewData).catch(() => {});
+    }, [judgesData, inpT, inpH, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
 
     // ── Sahaya Çağır ──────────────────────────────────────────────────────
     async function callToField() {
@@ -558,32 +610,48 @@ export default function CJPPage() {
                             >
                                 HAREKET <strong style={{ color: 'white' }}>{elementCount}</strong>
                             </div>
-                            {/* Hakem noktaları */}
+                            {/* Hakem noktaları — submitted:true = yeşil, veri var = sarı, yok = gri */}
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
                                 {['e1','e2','e3','e4','e5','e6'].map(jId => {
                                     const j = judgesData[jId];
-                                    const hasData = j && j.scores;
+                                    const submitted = j?.submitted === true;
+                                    const hasData   = j && j.scores;
+                                    const color = submitted ? '#10b981' : hasData ? '#eab308' : 'rgba(255,255,255,0.1)';
                                     return (
-                                        <div key={jId} style={{
+                                        <div key={jId} title={jId.toUpperCase()} style={{
                                             width: 10, height: 10, borderRadius: '50%',
-                                            background: hasData ? '#10b981' : 'rgba(255,255,255,0.1)',
-                                            boxShadow: hasData ? '0 0 8px #10b981' : 'none',
+                                            background: color,
+                                            boxShadow: submitted ? '0 0 8px #10b981' : hasData ? '0 0 8px #eab308' : 'none',
                                         }} />
                                     );
                                 })}
                             </div>
+                            {/* Tüm hakemler gönderdi bildirimi */}
+                            {['e1','e2','e3','e4','e5','e6'].every(jId => judgesData[jId]?.submitted) && (
+                                <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#10b981', fontWeight: 700, letterSpacing: 1 }}>
+                                    ✓ TÜM HAKEMLER GÖNDERDİ
+                                </div>
+                            )}
                         </HudCard>
 
                         <HudCard label="DIFFICULTY (D)" accent="#f59e0b" onClick={() => setShowUnlockPopup(true)}>
-                            <input
-                                className="hud-input"
-                                type="number"
-                                step="0.1"
-                                value={dInput}
-                                onChange={e => { setDInput(e.target.value); saveDraft(); }}
-                                placeholder="0.0"
-                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(245,158,11,0.3)', color: 'white' }}
-                            />
+                            {dFromJudge !== null ? (
+                                // D hakeminden gelen değer — büyük göster
+                                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#f59e0b' }}>
+                                    {dFromJudge.toFixed(1)}
+                                </div>
+                            ) : (
+                                // D hakemi yok — manuel giriş
+                                <input
+                                    className="hud-input"
+                                    type="number"
+                                    step="0.1"
+                                    value={dInput}
+                                    onChange={e => { setDInput(e.target.value); saveDraft(); }}
+                                    placeholder="0.0"
+                                    style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(245,158,11,0.3)', color: 'white' }}
+                                />
+                            )}
                         </HudCard>
 
                         <HudCard label="TIME (T)" accent="#38bdf8">
