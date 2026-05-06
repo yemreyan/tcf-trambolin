@@ -89,12 +89,11 @@ export default function ScoreboardPage() {
     const athlete = activeCtx?.current;
     const routine = activeCtx?.routine;
 
-    // Güncel sporcu sonucu
-    const currentResult = lastPublished && athlete &&
-        (lastPublished.athleteId === athlete.uniqueId || lastPublished.athleteId === athlete.id)
-        ? lastPublished : null;
-
-    const hasScore = currentResult && currentResult.status === 'published';
+    // liveScore: CJP'nin yayınladığı son puan (live/{compId}/scores/current)
+    // Bu veri doğrudan kullanılır — athleteId eşleşmesi gerekmez
+    // (lastPublished'ın athleteId alanı kaydedilmediğinden eşleşme yapılamıyor)
+    const hasScore = liveScore && liveScore.total !== undefined && liveScore.total !== null;
+    const currentResult = hasScore ? liveScore : null;
 
     return (
         <div
@@ -171,10 +170,12 @@ export default function ScoreboardPage() {
                                 </div>
                             </div>
                             <div style={{ fontSize: '5.5rem', fontWeight: 900, color: '#fff', textTransform: 'uppercase', lineHeight: 0.9, textShadow: '0 4px 15px rgba(0,0,0,0.8)', marginBottom: 10 }}>
-                                {athlete.surname}
+                                {athlete.isPair
+                                    ? (athlete.pairName || athlete.displayName || '')
+                                    : (athlete.surname || '')}
                             </div>
                             <div style={{ fontSize: '3rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', marginBottom: 28, textShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
-                                {athlete.name}
+                                {athlete.isPair ? '' : (athlete.name || athlete.displayName || '')}
                             </div>
                             <div style={{ fontSize: '1.8rem', color: '#38BDF8', fontWeight: 500 }}>
                                 {athlete.club || ''}
@@ -195,8 +196,11 @@ export default function ScoreboardPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 15 }}>
                                 <ScoreBox label="D" value={currentResult.d?.toFixed(1)} accent="#f59e0b" />
                                 <ScoreBox label="E" value={currentResult.e?.toFixed(2)} accent="#10b981" />
-                                <ScoreBox label="T" value={currentResult.t?.toFixed(3)} accent="#38bdf8" />
-                                <ScoreBox label="H" value={currentResult.h?.toFixed(1)} accent="#a855f7" />
+                                {currentResult.isPair
+                                    ? <ScoreBox label="S" value={currentResult.s?.toFixed(2)} accent="#c084fc" />
+                                    : <ScoreBox label="T" value={currentResult.t?.toFixed(3)} accent="#38bdf8" />
+                                }
+                                <ScoreBox label="H" value={currentResult.h?.toFixed(2)} accent="#a855f7" />
                             </div>
 
                             {/* Toplam */}

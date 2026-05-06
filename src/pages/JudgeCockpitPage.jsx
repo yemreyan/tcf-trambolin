@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, set } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
+import { getAthleteName, getAthleteClub } from '../lib/DataService';
 import PasswordGate from '../components/PasswordGate';
 
 const DEDUCT_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5];
@@ -200,7 +201,7 @@ export default function JudgeCockpitPage() {
                                 HAKEM {roleLabel}
                             </div>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                                {athlete ? `${athlete.surname || ''} ${athlete.name || ''}`.trim() : 'SPORCU BEKLENİYOR...'}
+                                {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR...'}
                             </div>
                         </div>
                     </div>

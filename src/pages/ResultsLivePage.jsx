@@ -14,7 +14,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, get } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { getScoringRule } from '../lib/DataService';
+import { getScoringRule, getAthleteName, getAthleteClub } from '../lib/DataService';
 
 const ATHLETES_PER_PAGE = 10;
 const CYCLE_MS = 8000;
@@ -26,6 +26,7 @@ export default function ResultsLivePage() {
     const [compName, setCompName] = useState('');
     const [categories, setCategories] = useState({});
     const [athletes, setAthletes] = useState([]);
+    const [pairs, setPairs] = useState([]);
     const [scores, setScores] = useState({});
     const [excluded, setExcluded] = useState(() => {
         const s = localStorage.getItem('tra_rl_excluded');
@@ -49,6 +50,7 @@ export default function ResultsLivePage() {
             setCompName(comp.name || '');
             setCategories(comp.categories || {});
             setAthletes(Object.values(comp.athletes || {}));
+            setPairs(Object.values(comp.pairs || {}));
         })();
 
         const unsubRes = onValue(ref(db, `competitions/${compId}/results`), snap => {
@@ -77,16 +79,18 @@ export default function ResultsLivePage() {
         const list = Object.values(categories).filter(c => !excluded.includes(c.id));
         const out = [];
         list.forEach(cat => {
-            const catAthletes = athletes.filter(a =>
-                (a.category === cat.id) || (a.categoryId === cat.id) || (a.catId === cat.id)
-            );
-            const totalPages = Math.max(1, Math.ceil(catAthletes.length / ATHLETES_PER_PAGE));
+            const count = cat.type === 'sync'
+                ? pairs.filter(p => p.categoryId === cat.id).length
+                : athletes.filter(a =>
+                    (a.category === cat.id) || (a.categoryId === cat.id) || (a.catId === cat.id)
+                  ).length;
+            const totalPages = Math.max(1, Math.ceil(count / ATHLETES_PER_PAGE));
             for (let p = 0; p < totalPages; p++) {
                 out.push({ cat, page: p, totalPages });
             }
         });
         return out;
-    }, [categories, athletes, excluded]);
+    }, [categories, athletes, pairs, excluded]);
 
     // Cycle
     useEffect(() => {
@@ -106,10 +110,37 @@ export default function ResultsLivePage() {
 
     // ── Sıralama hesapla ──────────────────────────────────────────────────
     function computeRanking(cat) {
+        const rule = getScoringRule(cat);
+        const isSync = cat.type === 'sync';
+
+        if (isSync) {
+            const catPairs = pairs.filter(p => p.categoryId === cat.id);
+            const rows = catPairs.map(pair => {
+                const res = scores[pair.id] || {};
+                const r1 = res.r1?.total ?? null;
+                const r2 = res.r2?.total ?? null;
+                const s1 = res.r1?.status;
+                const s2 = res.r2?.status;
+                let total = 0;
+                if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
+                else total = (r1 || 0) + (r2 || 0);
+                const a = {
+                    id: pair.id,
+                    name: pair.displayName,
+                    surname: '',
+                    club: pair.club || '',
+                    isPair: true,
+                    pairName: pair.displayName,
+                };
+                return { a, r1, r2, s1, s2, total };
+            });
+            rows.sort((a, b) => b.total - a.total);
+            return rows;
+        }
+
         const filtered = athletes.filter(a =>
             (a.category === cat.id) || (a.categoryId === cat.id) || (a.catId === cat.id)
         );
-        const rule = getScoringRule(cat);
         const rows = filtered.map(a => {
             const res = scores[a.uniqueId] || scores[a.id] || {};
             const r1 = res.r1?.total ?? null;
@@ -215,9 +246,12 @@ export default function ResultsLivePage() {
                             }}>{rank}</div>
                             <div>
                                 <div style={{ fontSize: '1.3rem', fontWeight: 800 }}>
-                                    {row.a.surname?.toUpperCase()} {row.a.name}
+                                    {row.a.isPair
+                                        ? <span><i className="material-icons-round" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4, color: '#c084fc' }}>sync</i>{row.a.pairName}</span>
+                                        : <>{getAthleteName(row.a).toUpperCase()}</>
+                                    }
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>{row.a.club || ''}</div>
+                                <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>{getAthleteClub(row.a)}</div>
                             </div>
                             <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '1.2rem', textAlign: 'center', color: '#cbd5e1' }}>
                                 R1: {fmtScore(row.r1, row.s1)}
@@ -269,8 +303,11 @@ export default function ResultsLivePage() {
                         <div style={{ fontSize: '1rem', color: '#94a3b8', letterSpacing: 3, marginBottom: 12 }}>
                             YENİ PUAN
                         </div>
-                        <div style={{ fontSize: '3.5rem', fontWeight: 900, marginBottom: 10 }}>
-                            {flash.athleteName || ''}
+                        <div style={{ fontSize: flash.isPair ? '2.4rem' : '3.5rem', fontWeight: 900, marginBottom: 10, lineHeight: 1.2 }}>
+                            {flash.isPair && flash.pairName
+                                ? <span><i className="material-icons-round" style={{ fontSize: 28, verticalAlign: 'middle', marginRight: 8, color: '#c084fc' }}>sync</i>{flash.pairName}</span>
+                                : flash.athleteName || ''
+                            }
                         </div>
                         <div style={{ fontSize: '1.2rem', color: '#94a3b8', marginBottom: 30 }}>
                             {flash.club || ''}
@@ -281,7 +318,10 @@ export default function ResultsLivePage() {
                             <MiniScore label="D" value={flash.d?.toFixed(1)} color="#f59e0b" />
                             <MiniScore label="E" value={flash.e?.toFixed(2)} color="#10b981" />
                             <MiniScore label="T" value={flash.t?.toFixed(3)} color="#38bdf8" />
-                            <MiniScore label="H" value={flash.h?.toFixed(1)} color="#a855f7" />
+                            {flash.isPair
+                                ? <MiniScore label="S" value={flash.s?.toFixed(2)} color="#c084fc" />
+                                : <MiniScore label="H" value={flash.h?.toFixed(1)} color="#a855f7" />
+                            }
                         </div>
                         <div style={{
                             fontFamily: "'Space Mono',monospace", fontSize: '5rem', fontWeight: 900, color: '#38bdf8',

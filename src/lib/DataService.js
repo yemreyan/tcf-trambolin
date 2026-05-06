@@ -9,6 +9,20 @@ import {
 } from 'firebase/database';
 import { db } from './firebase';
 
+/**
+ * Firebase undefined değerlere izin vermiyor.
+ * Bu yardımcı undefined olan her değeri null'a çevirir (derin).
+ */
+export function stripUndefined(obj) {
+    if (obj === undefined) return null;
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+        out[k] = v === undefined ? null : stripUndefined(v);
+    }
+    return out;
+}
+
 // ── Sabitler ──────────────────────────────────────────────────────────────
 export const Config = {
     ROLES: {
@@ -41,6 +55,30 @@ export const Utils = {
     formatScore: (num) => (num ? Number(num).toFixed(3) : '0.000'),
     formatDeduct: (num) => (num ? Number(num).toFixed(1) : '0.0'),
 };
+
+/**
+ * Herhangi bir sporcu objesinden görünen adı çıkarır.
+ * Eski HTML sistemi farklı alan adları kullanmış olabilir (ad/soyad vs name/surname).
+ */
+export function getAthleteName(ath) {
+    if (!ath) return '';
+    // Önce hazır birleşik alanları dene
+    if (ath.pairName) return ath.pairName;
+    if (ath.displayName) return ath.displayName;
+    // Olası alan adları: name/surname, ad/soyad, firstName/lastName, isim/soyisim
+    const name    = ath.name    || ath.ad      || ath.firstName || ath.isim    || '';
+    const surname = ath.surname || ath.soyad   || ath.lastName  || ath.soyisim || '';
+    const full = `${surname} ${name}`.trim();
+    return full || ath.id || '—';
+}
+
+/**
+ * Sporcu kulübü/okul adını çıkarır (farklı alan isimleri desteğiyle).
+ */
+export function getAthleteClub(ath) {
+    if (!ath) return '';
+    return ath.club || ath.kulup || ath.okul || ath.school || '';
+}
 
 /**
  * Türkçe karakterleri normalize ederek Firebase-safe ID üretir.
@@ -148,7 +186,7 @@ export class DataService {
 
     // ── Sonuçlar ───────────────────────────────────────────────────────────
     async publishResult(athId, routine, resultData) {
-        const data = {
+        const data = stripUndefined({
             ...resultData,
             athleteId: athId,
             routine: parseInt(routine),
@@ -156,7 +194,7 @@ export class DataService {
             status: resultData.status || 'published',
             isLive: null,
             timestamp: Date.now(),
-        };
+        });
         await update(ref(db), {
             [`competitions/${this.#compId}/results/${athId}/r${routine}`]: data,
         });
@@ -178,10 +216,10 @@ export class DataService {
 
     // ── Taslaklar ──────────────────────────────────────────────────────────
     async saveDraft(athId, routine, draftData) {
-        await update(ref(db, `competitions/${this.#compId}/drafts/${athId}/r${routine}`), {
+        await update(ref(db, `competitions/${this.#compId}/drafts/${athId}/r${routine}`), stripUndefined({
             ...draftData,
             updatedAt: Date.now(),
-        });
+        }));
     }
 
     async saveJudgeDraft(athId, routine, judgeId, data) {
@@ -210,7 +248,7 @@ export class DataService {
     }
 
     async updateActiveContext(panel, data) {
-        await update(ref(db, `live/${this.#compId}/panels/${panel}/activeContext`), data);
+        await update(ref(db, `live/${this.#compId}/panels/${panel}/activeContext`), stripUndefined(data));
     }
 
     listenLiveScores(callback) {
@@ -223,5 +261,45 @@ export class DataService {
         return onValue(ref(db, `competitions/${this.#compId}/juryPanels`), snap => {
             callback(snap.val() || {});
         });
+    }
+
+    // ── Sync Çiftler ───────────────────────────────────────────────────────
+    async getPairs() {
+        const snap = await get(ref(db, `competitions/${this.#compId}/pairs`));
+        return snap.exists() ? snap.val() : {};
+    }
+
+    listenPairs(callback) {
+        return onValue(ref(db, `competitions/${this.#compId}/pairs`), snap => {
+            callback(snap.val() || {});
+        });
+    }
+
+    async createPair(ath1, ath2, categoryId) {
+        const pairId = Utils.id('pair');
+        const displayName = `${ath1.surname || ath1.name} & ${ath2.surname || ath2.name}`;
+        const pair = {
+            id: pairId,
+            categoryId,
+            athlete1Id: ath1.id,
+            athlete2Id: ath2.id,
+            displayName,
+            club: ath1.club || ath2.club || '',
+            createdAt: Date.now(),
+        };
+        const updates = {};
+        updates[`competitions/${this.#compId}/pairs/${pairId}`] = pair;
+        updates[`competitions/${this.#compId}/athletes/${ath1.id}/pairId`] = pairId;
+        updates[`competitions/${this.#compId}/athletes/${ath2.id}/pairId`] = pairId;
+        await update(ref(db), updates);
+        return pair;
+    }
+
+    async dissolvePair(pairId, athlete1Id, athlete2Id) {
+        const updates = {};
+        updates[`competitions/${this.#compId}/pairs/${pairId}`] = null;
+        updates[`competitions/${this.#compId}/athletes/${athlete1Id}/pairId`] = null;
+        updates[`competitions/${this.#compId}/athletes/${athlete2Id}/pairId`] = null;
+        await update(ref(db), updates);
     }
 }

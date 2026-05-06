@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, get, set, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { DataService } from '../lib/DataService';
+import { DataService, getAthleteName, getAthleteClub } from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import PasswordGate from '../components/PasswordGate';
@@ -113,10 +113,11 @@ export default function CJPPage() {
     const [activeRoutine, setActiveRoutine] = useState(1); // 1 | 2
 
     // ── Girdiler ─────────────────────────────────────────────────────────
-    const [inpT, setInpT] = useState('');
-    const [inpH, setInpH] = useState('');
-    const [inpS, setInpS] = useState('');
-    const [inpP, setInpP] = useState('');
+    const [inpT,  setInpT]  = useState('');
+    const [inpH,  setInpH]  = useState(''); // Bireysel: tek H | Sync: H1
+    const [inpH2, setInpH2] = useState(''); // Sync: H2
+    const [inpS,  setInpS]  = useState(''); // Sync: S (formülde ×2 kullanılır)
+    const [inpP,  setInpP]  = useState('');
     const [inpDp, setInpDp] = useState('');
     const [elementCount, setElementCount] = useState(10);
     const [currentStatus, setCurrentStatus] = useState(null); // 'DNS' | 'DNF' | null
@@ -128,6 +129,7 @@ export default function CJPPage() {
     const [showUnlockPopup, setShowUnlockPopup] = useState(false);
     const [showElementPopup, setShowElementPopup] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [allPairs, setAllPairs] = useState({});  // pairId → pair obj
 
     const dsRef = useRef(null);
     const unsubRefs = useRef([]);
@@ -142,15 +144,28 @@ export default function CJPPage() {
     const dFromJudge = getDScoreFromJudge(judgesData);
     const dVal = dFromJudge !== null ? dFromJudge : (parseFloat(dInput) || 0);
 
-    const tVal  = parseFloat(inpT)  || 0;
-    const hVal  = parseFloat(inpH)  || 0;
-    const sVal  = parseFloat(inpS)  || 0;
-    const pVal  = parseFloat(inpP)  || 0;
-    const dpVal = parseFloat(inpDp) || 0;
+    const tVal   = parseFloat(inpT)  || 0;
+    const h1Val  = parseFloat(inpH)  || 0; // Bireysel: H | Sync: H1
+    const h2Val  = parseFloat(inpH2) || 0; // Sync: H2
+    const sVal   = parseFloat(inpS)  || 0;
+    const pVal   = parseFloat(inpP)  || 0;
+    const dpVal  = parseFloat(inpDp) || 0;
 
-    // Total = D + E + T - H - S - P - DP
+    // Sync mi? Kategoriye göre belirlenir
+    const isSync = selected?.catType === 'sync';
+
+    // Hesaplanan ara değerler
+    const hEffective = isSync ? (h1Val + h2Val) / 2 : h1Val; // Sync: (H1+H2)/2 | Bireysel: H
+    const sEffective = isSync ? sVal * 2 : 0;                 // Sync: S×2 | Bireysel: 0
+
+    // Total (orijinal HTML cjp.html formülü):
+    //   Bireysel → E + H + D + T - P - DP          (H pozitif, EKLENIR)
+    //   Sync     → E + H + D + (S×2) - P - DP      (T=0, S×2 eklenir, H yine pozitif)
+    // hEffective = Bireysel: H | Sync: (H1+H2)/2
     const totalScore = Math.max(0,
-        dVal + eScore + tVal - hVal - sVal - pVal - dpVal
+        isSync
+            ? eScore + hEffective + dVal + sEffective - pVal - dpVal
+            : eScore + h1Val      + dVal + tVal       - pVal - dpVal
     );
 
     // ── Şifre kapısı ──────────────────────────────────────────────────────
@@ -215,7 +230,19 @@ export default function CJPPage() {
 
                 finalAthletes.forEach(ath => {
                     if (!ath) return;
-                    list.push({ ...ath, catId: cat.id, catName: cat.name, catType: cat.type, uniqueId: ath.id });
+                    // Her zaman güncel globalAthletes verisini önce al
+                    // (startList anlık görüntüde eski/boş isimler olabilir)
+                    const fresh = globalAthletes[ath.id] || {};
+                    const mergedName    = (ath.name    || '').trim() || (fresh.name    || fresh.ad      || fresh.firstName || '');
+                    const mergedSurname = (ath.surname || '').trim() || (fresh.surname || fresh.soyad   || fresh.lastName  || '');
+                    const mergedClub    = (ath.club    || '').trim() || (fresh.club    || fresh.kulup   || '');
+                    list.push({
+                        ...ath,
+                        name: mergedName,
+                        surname: mergedSurname,
+                        club: mergedClub,
+                        catId: cat.id, catName: cat.name, catType: cat.type ?? null, uniqueId: ath.id,
+                    });
                 });
             });
 
@@ -238,7 +265,10 @@ export default function CJPPage() {
             }
         });
 
-        unsubRefs.current = [compUnsub, resUnsub, judgesUnsub, ctxUnsub];
+        // 5. Sync çiftleri dinle
+        const pairsUnsub = dsRef.current.listenPairs(pairs => setAllPairs(pairs || {}));
+
+        unsubRefs.current = [compUnsub, resUnsub, judgesUnsub, ctxUnsub, pairsUnsub];
         return () => unsubRefs.current.forEach(u => u && u());
     }, [unlocked, compId, currentPanel]);
 
@@ -256,7 +286,7 @@ export default function CJPPage() {
         setSelected(ath);
         setIsLocked(false);
         setCurrentStatus(null);
-        setInpT(''); setInpH(''); setInpS(''); setInpP(''); setInpDp('');
+        setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
         setDInput('');
         setElementCount(10);
         setActiveRoutine(1);
@@ -280,11 +310,13 @@ export default function CJPPage() {
 
         if (result) {
             // Yayınlanmış sonuç → yükle ve kilitle
-            setInpT(result.t || '');
-            setInpH(result.h || '');
-            setInpS(result.s || '');
-            setInpP(result.p || '');
-            setInpDp(result.dp || '');
+            setInpT(result.t != null ? String(result.t) : '');
+            setInpH(result.h1 != null ? String(result.h1) : result.h != null ? String(result.h) : '');
+            setInpH2(result.h2 != null ? String(result.h2) : '');
+            // S yayınlanan değer zaten ×2 olarak kaydedildi, geri çevirip göster
+            setInpS(result.sRaw != null ? String(result.sRaw) : result.s != null ? String(result.s) : '');
+            setInpP(result.p != null ? String(result.p) : '');
+            setInpDp(result.dp != null ? String(result.dp) : '');
             setDInput(result.d != null ? String(result.d) : '');
             if (result.elementDeductions?.length) setElementCount(result.elementDeductions.length);
             setIsLocked(true);
@@ -296,6 +328,7 @@ export default function CJPPage() {
                     const inp = draft.inputs;
                     setInpT(inp.t || '');
                     setInpH(inp.h || '');
+                    setInpH2(inp.h2 || '');
                     setInpS(inp.s || '');
                     setInpP(inp.p || '');
                     setInpDp(inp.dp || '');
@@ -311,7 +344,7 @@ export default function CJPPage() {
     async function saveDraft() {
         if (!selected || !dsRef.current || isLocked) return;
         await dsRef.current.saveDraft(selected.uniqueId, activeRoutine, {
-            inputs: { t: inpT, h: inpH, s: inpS, p: inpP, dp: inpDp, d: dInput },
+            inputs: { t: inpT, h: inpH, h2: inpH2, s: inpS, p: inpP, dp: inpDp, d: dInput },
             elementCount,
         });
     }
@@ -322,30 +355,44 @@ export default function CJPPage() {
         if (!selected || !compId || isLocked) return;
         const hasStarted =
             Object.keys(judgesData).length > 0 ||
-            dVal > 0 || tVal > 0 || hVal > 0 || sVal > 0 || pVal > 0 || dpVal > 0 || currentStatus;
+            dVal > 0 || tVal > 0 || h1Val > 0 || h2Val > 0 || sVal > 0 || pVal > 0 || dpVal > 0 || currentStatus;
         if (!hasStarted) return;
 
         const previewData = {
             isLive: true,
             athleteId: selected.uniqueId,
+            athleteName: getAthleteName(selected),
+            club: getAthleteClub(selected),
             routine: activeRoutine,
             panel: currentPanel,
             e: parseFloat(eScore.toFixed(2)),
             d: dVal,
-            t: tVal, h: hVal, s: sVal, p: pVal, dp: dpVal,
+            t: isSync ? 0 : tVal,
+            h: parseFloat(hEffective.toFixed(3)),
+            h1: isSync ? h1Val : null,   // undefined → null (Firebase undefined kabul etmez)
+            h2: isSync ? h2Val : null,
+            s: parseFloat(sEffective.toFixed(3)),
+            sRaw: isSync ? sVal : 0,
+            p: pVal, dp: dpVal,
             total: parseFloat(totalScore.toFixed(3)),
             status: currentStatus || null,
+            isPair: isSync && !!selected?.pairId,
+            pairName: selected?.pairName || null,
         };
         set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), previewData).catch(() => {});
-    }, [judgesData, inpT, inpH, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
+    }, [judgesData, inpT, inpH, inpH2, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
 
     // ── Sahaya Çağır ──────────────────────────────────────────────────────
     async function callToField() {
         if (!selected || !dsRef.current) return;
         setIsLocked(false);
 
+        const displayLabel = getAthleteName(selected);
         await dsRef.current.updateActiveContext(currentPanel, {
-            current: selected,
+            current: {
+                ...selected,
+                displayName: displayLabel,
+            },
             next: nextAth,
             routine: activeRoutine,
             categoryId: selected.catId,
@@ -356,7 +403,7 @@ export default function CJPPage() {
         await remove(ref(db, `live/${compId}/panels/${currentPanel}/scores/judges`));
         setJudgesData({});
 
-        toast(`${selected.name} ${selected.surname} sahaya çağrıldı — ${activeRoutine}. Seri`, 'success');
+        toast(`${displayLabel} sahaya çağrıldı — ${activeRoutine}. Seri`, 'success');
     }
 
     // ── Yayınla ───────────────────────────────────────────────────────────
@@ -364,18 +411,19 @@ export default function CJPPage() {
         if (!selected || !dsRef.current) return;
 
         if (currentStatus === 'DNS' || currentStatus === 'DNF') {
-            const ok = await confirm('Durum Yayınla', `${selected.name} ${selected.surname} — ${currentStatus} olarak yayınlanacak. Onaylıyor musunuz?`);
+            const ok = await confirm('Durum Yayınla', `${getAthleteName(selected)} — ${currentStatus} olarak yayınlanacak. Onaylıyor musunuz?`);
             if (!ok) return;
 
             setIsSubmitting(true);
             try {
                 await dsRef.current.publishResult(selected.uniqueId, activeRoutine, {
-                    d: 0, e: 0, t: 0, h: 0, s: 0, p: 0, total: 0,
+                    d: 0, e: 0, t: 0, h: 0, h1: 0, h2: 0, s: 0, sRaw: 0, p: 0, dp: 0, total: 0,
                     status: currentStatus,
                     judges: {},
                 });
                 toast(`${currentStatus} yayınlandı.`, 'info');
                 setIsLocked(true);
+                if (activeRoutine === 1) setActiveRoutine(2);
             } catch (e) {
                 toast('Yayınlama hatası: ' + e.message, 'error');
             } finally {
@@ -385,7 +433,7 @@ export default function CJPPage() {
         }
 
         const ok = await confirm('Puanı Yayınla',
-            `${selected.name} ${selected.surname} — ${activeRoutine}. Seri\nToplam: ${totalScore.toFixed(3)}\n\nYayınlamak istediğinize emin misiniz?`
+            `${getAthleteName(selected)} — ${activeRoutine}. Seri\nToplam: ${totalScore.toFixed(3)}\n\nYayınlamak istediğinize emin misiniz?`
         );
         if (!ok) return;
 
@@ -394,18 +442,39 @@ export default function CJPPage() {
             await dsRef.current.publishResult(selected.uniqueId, activeRoutine, {
                 d: dVal,
                 e: parseFloat(eScore.toFixed(2)),
-                t: parseFloat(inpT) || 0,
-                h: parseFloat(inpH) || 0,
-                s: parseFloat(inpS) || 0,
-                p: parseFloat(inpP) || 0,
-                dp: parseFloat(inpDp) || 0,
+                t: isSync ? 0 : tVal,
+                h: parseFloat(hEffective.toFixed(3)),
+                h1: isSync ? h1Val : null,   // undefined → null
+                h2: isSync ? h2Val : null,
+                s: parseFloat(sEffective.toFixed(3)),
+                sRaw: isSync ? sVal : 0,
+                p: pVal,
+                dp: dpVal,
                 total: parseFloat(totalScore.toFixed(3)),
                 status: 'published',
                 judges: judgesData,
                 elementCount,
             });
+            // Flash ekranına bildir (ResultsLivePage dinler)
+            const displayLabel = getAthleteName(selected);
+            await set(ref(db, `live/${compId}/scores/current`), {
+                athleteName: displayLabel,
+                club: getAthleteClub(selected),
+                d: dVal,
+                e: parseFloat(eScore.toFixed(2)),
+                t: isSync ? 0 : tVal,
+                h: parseFloat(hEffective.toFixed(3)),
+                s: parseFloat(sEffective.toFixed(3)),
+                sRaw: isSync ? sVal : 0,
+                p: pVal,
+                total: parseFloat(totalScore.toFixed(3)),
+                isPair: isSync && !!selected?.pairId,
+                pairName: selected?.pairName || null,
+                timestamp: Date.now(),
+            });
             toast('Puan yayınlandı!', 'success');
             setIsLocked(true);
+            if (activeRoutine === 1) setActiveRoutine(2);
         } catch (e) {
             toast('Yayınlama hatası: ' + e.message, 'error');
         } finally {
@@ -415,7 +484,7 @@ export default function CJPPage() {
 
     // ── Sıfırla ───────────────────────────────────────────────────────────
     function resetScores() {
-        setInpT(''); setInpH(''); setInpS(''); setInpP(''); setInpDp('');
+        setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
         setDInput('');
         setJudgesData({});
         setCurrentStatus(null);
@@ -423,14 +492,61 @@ export default function CJPPage() {
     }
 
     // ── Filtre ────────────────────────────────────────────────────────────
-    const filteredAthletes = allAthletes.filter(a => {
-        if (selectedCatId && a.catId !== selectedCatId) return false;
-        if (!selectedCatId) return false; // Kategori seçilmeden gösterme
-        if (!searchQuery) return true;
+    const selectedCat = allCategories[selectedCatId] || null;
+    const isSyncCategory = selectedCat?.type === 'sync';
+
+    // Sync kategorisi → sporcuları pair listesine dönüştür
+    // Pair olan sporcular pair olarak, çiftsiz sporcular bireysel görünür
+    const filteredAthletes = (() => {
+        const baseList = allAthletes.filter(a => {
+            if (selectedCatId && a.catId !== selectedCatId) return false;
+            if (!selectedCatId) return false;
+            return true;
+        });
+
+        if (!isSyncCategory) {
+            // Bireysel: normal filtre + arama
+            return baseList.filter(a => {
+                if (!searchQuery) return true;
+                const q = searchQuery.toLowerCase();
+                return getAthleteName(a).toLowerCase().includes(q) ||
+                    getAthleteClub(a).toLowerCase().includes(q);
+            });
+        }
+
+        // Sync kategori: pair olanları tekli göster, çiftsizleri de ekle
+        const seenPairs = new Set();
+        const result = [];
+        baseList.forEach(a => {
+            if (a.pairId && allPairs[a.pairId]) {
+                if (!seenPairs.has(a.pairId)) {
+                    seenPairs.add(a.pairId);
+                    const pair = allPairs[a.pairId];
+                    // Pair nesnesini CJP sporcu formatına çevir
+                    result.push({
+                        ...a,
+                        uniqueId: pair.id,
+                        isPair: true,
+                        pairId: pair.id,
+                        pairName: pair.displayName,
+                        name: pair.displayName,
+                        surname: '',
+                        club: pair.club || a.club || '',
+                    });
+                }
+            } else {
+                // Çiftsiz sporcu — bireysel göster
+                result.push(a);
+            }
+        });
+
+        if (!searchQuery) return result;
         const q = searchQuery.toLowerCase();
-        return (a.name + ' ' + a.surname).toLowerCase().includes(q) ||
-            (a.club || '').toLowerCase().includes(q);
-    });
+        return result.filter(a =>
+            getAthleteName(a).toLowerCase().includes(q) ||
+            getAthleteClub(a).toLowerCase().includes(q)
+        );
+    })();
 
     const catList = Object.values(allCategories);
     const athRes = selected ? (competitionResults[selected.uniqueId] || {}) : {};
@@ -520,10 +636,10 @@ export default function CJPPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'white' }}>
-                                            {idx + 1}. {ath.name} {ath.surname}
+                                            {idx + 1}. {getAthleteName(ath)}
                                         </div>
                                         <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
-                                            {ath.club || '—'}
+                                            {getAthleteClub(ath) || '—'}
                                         </div>
                                     </div>
                                     <span style={{
@@ -553,10 +669,10 @@ export default function CJPPage() {
                             }}>BAŞHAKEM</span>
                             <div>
                                 <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'white' }}>
-                                    {selected ? `${selected.name} ${selected.surname}` : '—'}
+                                    {selected ? getAthleteName(selected) : '—'}
                                 </div>
                                 <div style={{ display: 'flex', gap: 10, marginTop: 4, alignItems: 'center' }}>
-                                    <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{selected?.club || '—'}</span>
+                                    <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{selected ? getAthleteClub(selected) || '—' : '—'}</span>
                                     {selected && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600 }}>{selected.catName}</span>}
                                 </div>
                             </div>
@@ -583,7 +699,7 @@ export default function CJPPage() {
                                 ))}
                             </div>
                             <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', letterSpacing: 1, marginBottom: 3 }}>SIRADAKİ</div>
-                            <div style={{ fontWeight: 600, color: '#94a3b8' }}>{nextAth ? `${nextAth.name} ${nextAth.surname}` : 'Liste Sonu'}</div>
+                            <div style={{ fontWeight: 600, color: '#94a3b8' }}>{nextAth ? getAthleteName(nextAth) : 'Liste Sonu'}</div>
                         </div>
                     </div>
                 </div>
@@ -608,7 +724,7 @@ export default function CJPPage() {
 
                     {/* HUD Satır 1: E, D, T, H */}
                     <div className="hud-row" style={{ marginBottom: 16 }}>
-                        <HudCard label="E SCORE" accent="#10b981" onClick={() => setShowUnlockPopup(true)}>
+                        <HudCard label="E SCORE" accent="#10b981">
                             <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'white' }}>{eScore.toFixed(2)}</div>
                             {/* Hareket sayısı */}
                             <div
@@ -641,7 +757,7 @@ export default function CJPPage() {
                             )}
                         </HudCard>
 
-                        <HudCard label="DIFFICULTY (D)" accent="#f59e0b" onClick={() => setShowUnlockPopup(true)}>
+                        <HudCard label="DIFFICULTY (D)" accent="#f59e0b">
                             {dFromJudge !== null ? (
                                 // D hakeminden gelen değer — büyük göster
                                 <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#f59e0b' }}>
@@ -661,44 +777,81 @@ export default function CJPPage() {
                             )}
                         </HudCard>
 
-                        <HudCard label="TIME (T)" accent="#38bdf8">
+                        {/* T kartı: Bireysel'de aktif, Sync'te devre dışı */}
+                        <HudCard label="TIME (T)" accent="#38bdf8"
+                            style={isSync ? { opacity: 0.3, pointerEvents: 'none' } : {}}>
                             <input
                                 className="hud-input"
                                 type="number"
                                 step="0.005"
-                                value={inpT}
-                                onChange={e => { setInpT(e.target.value); saveDraft(); }}
+                                value={isSync ? '' : inpT}
+                                disabled={isSync}
+                                onChange={e => { if (!isSync) { setInpT(e.target.value); saveDraft(); } }}
                                 placeholder="0.000"
-                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(59,130,246,0.3)', color: 'white' }}
+                                style={{ background: 'rgba(0,0,0,0.2)', border: `1px solid ${isSync ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.3)'}`, color: 'white' }}
                             />
                         </HudCard>
 
-                        <HudCard label="HORZ. DISP (H)" accent="#a855f7">
-                            <input
-                                className="hud-input"
-                                type="number"
-                                step="0.1"
-                                max="10"
-                                value={inpH}
-                                onChange={e => { setInpH(e.target.value); saveDraft(); }}
-                                placeholder="9.0"
-                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(139,92,246,0.3)', color: 'white' }}
-                            />
+                        {/* H kartı: Bireysel'de tek input, Sync'te H1+H2 */}
+                        <HudCard label={isSync ? `HORZ. DISP — Ort: ${hEffective.toFixed(2)}` : 'HORZ. DISP (H)'} accent="#a855f7">
+                            {isSync ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 700, minWidth: 22 }}>H1</span>
+                                        <input
+                                            className="hud-input"
+                                            type="number" step="0.1" max="10"
+                                            value={inpH}
+                                            onChange={e => { setInpH(e.target.value); saveDraft(); }}
+                                            placeholder="0.0"
+                                            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(168,85,247,0.4)', color: 'white', flex: 1, fontSize: '1.1rem', padding: '6px 10px' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 700, minWidth: 22 }}>H2</span>
+                                        <input
+                                            className="hud-input"
+                                            type="number" step="0.1" max="10"
+                                            value={inpH2}
+                                            onChange={e => { setInpH2(e.target.value); saveDraft(); }}
+                                            placeholder="0.0"
+                                            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(168,85,247,0.4)', color: 'white', flex: 1, fontSize: '1.1rem', padding: '6px 10px' }}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <input
+                                    className="hud-input"
+                                    type="number" step="0.1" max="10"
+                                    value={inpH}
+                                    onChange={e => { setInpH(e.target.value); saveDraft(); }}
+                                    placeholder="9.0"
+                                    style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(139,92,246,0.3)', color: 'white' }}
+                                />
+                            )}
                         </HudCard>
                     </div>
 
-                    {/* HUD Satır 2: S, P, DP */}
+                    {/* HUD Satır 2: S (sync), P, DP */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 15, marginBottom: 16 }}>
-                        <HudCard label="SYNCHRO (S)" accent="#c084fc">
+                        {/* S kartı: Sync'te aktif (T'nin yerine) ve ×2 göstergeli, bireysel'de devre dışı */}
+                        <HudCard label={isSync ? 'SYNCHRO (S) ✓  ×2' : 'SYNCHRO (S)'} accent="#c084fc"
+                            style={!isSync ? { opacity: 0.3, pointerEvents: 'none' } : {}}>
                             <input
                                 className="hud-input"
                                 type="number"
                                 step="0.01"
-                                value={inpS}
-                                onChange={e => { setInpS(e.target.value); saveDraft(); }}
+                                value={isSync ? inpS : ''}
+                                disabled={!isSync}
+                                onChange={e => { if (isSync) { setInpS(e.target.value); saveDraft(); } }}
                                 placeholder="0.00"
-                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(192,132,252,0.3)', color: 'white' }}
+                                style={{ background: 'rgba(0,0,0,0.2)', border: `1px solid ${isSync ? 'rgba(192,132,252,0.6)' : 'rgba(192,132,252,0.2)'}`, color: 'white' }}
                             />
+                            {isSync && sVal > 0 && (
+                                <div style={{ fontSize: '0.72rem', color: '#c084fc', fontWeight: 700, marginTop: 4, letterSpacing: 1 }}>
+                                    {sVal.toFixed(2)} × 2 = <span style={{ color: 'white' }}>{sEffective.toFixed(2)}</span>
+                                </div>
+                            )}
                         </HudCard>
 
                         <HudCard label="PENALTY (P)" accent="#f43f5e">
@@ -746,7 +899,8 @@ export default function CJPPage() {
                         </button>
                         <button
                             onClick={resetScores}
-                            style={{ padding: '18px 20px', borderRadius: 12, fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', cursor: 'pointer' }}
+                            disabled={isLocked}
+                            style={{ padding: '18px 20px', borderRadius: 12, fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: isLocked ? '#475569' : '#fca5a5', cursor: isLocked ? 'not-allowed' : 'pointer', opacity: isLocked ? 0.4 : 1 }}
                         >
                             SIFIRLA
                         </button>
@@ -759,7 +913,7 @@ export default function CJPPage() {
 
                     <button
                         className="hud-btn-publish"
-                        disabled={!selected || isSubmitting}
+                        disabled={!selected || isSubmitting || isLocked}
                         onClick={publishScore}
                         style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}
                     >

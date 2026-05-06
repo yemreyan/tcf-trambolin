@@ -13,10 +13,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, get } from 'firebase/database';
+import * as XLSX from 'xlsx';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { getScoringRule } from '../lib/DataService';
+import { getScoringRule, getAthleteName, getAthleteClub } from '../lib/DataService';
 
 export default function ResultsFinalPage() {
     const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function ResultsFinalPage() {
     const [comp, setComp] = useState(null);
     const [categories, setCategories] = useState({});
     const [athletes, setAthletes] = useState([]);
+    const [pairs, setPairs] = useState({});
     const [scores, setScores] = useState({});
     const [selectedCatId, setSelectedCatId] = useState('');
     const [activeTab, setActiveTab] = useState('ind'); // 'ind' | 'team'
@@ -41,6 +43,7 @@ export default function ResultsFinalPage() {
             setComp(data);
             setCategories(data.categories || {});
             setAthletes(Object.values(data.athletes || {}));
+            setPairs(data.pairs || {});
             const [resSnap] = await Promise.all([
                 get(ref(db, `competitions/${compId}/results`)),
             ]);
@@ -53,10 +56,38 @@ export default function ResultsFinalPage() {
 
     const currentCat = categories[selectedCatId] || null;
     const rule = currentCat ? getScoringRule(currentCat) : 'sum';
+    const isSync = currentCat?.type === 'sync';
 
-    // ── Bireysel sıralama ─────────────────────────────────────────────────
+    // ── Bireysel / Çift sıralama ──────────────────────────────────────────
     const individualRanking = useMemo(() => {
         if (!currentCat) return [];
+
+        if (isSync) {
+            // Sync: çiftleri listele
+            const catPairs = Object.values(pairs).filter(p => p.categoryId === currentCat.id);
+            const rows = catPairs.map(pair => {
+                const res = scores[pair.id] || {};
+                const r1 = res.r1?.total ?? null;
+                const r2 = res.r2?.total ?? null;
+                let total = 0;
+                if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
+                else total = (r1 || 0) + (r2 || 0);
+                // a: synthetic athlete-like object for rendering
+                const a1 = athletes.find(a => a.id === pair.athlete1Id) || {};
+                const a = {
+                    id: pair.id,
+                    name: pair.displayName,
+                    surname: '',
+                    club: pair.club || a1.club || '',
+                    isPair: true,
+                    pairName: pair.displayName,
+                };
+                return { a, r1, r2, total, s1: res.r1?.status, s2: res.r2?.status };
+            });
+            rows.sort((a, b) => b.total - a.total);
+            return rows;
+        }
+
         const filtered = athletes.filter(a =>
             (a.category === currentCat.id) || (a.categoryId === currentCat.id) || (a.catId === currentCat.id)
         );
@@ -74,7 +105,7 @@ export default function ResultsFinalPage() {
         });
         rows.sort((a, b) => b.total - a.total);
         return rows;
-    }, [athletes, scores, currentCat, rule]);
+    }, [athletes, pairs, scores, currentCat, rule, isSync]);
 
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
@@ -103,23 +134,11 @@ export default function ResultsFinalPage() {
     }
 
     // ── Excel ────────────────────────────────────────────────────────────
-    async function loadXLSX() {
-        if (window.XLSX) return window.XLSX;
-        await new Promise((res, rej) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
-            s.onload = res; s.onerror = rej;
-            document.head.appendChild(s);
-        });
-        return window.XLSX;
-    }
-
     async function exportSingleToExcel() {
         if (!currentCat) return;
-        const XLSX = await loadXLSX();
         const headers = ['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam'];
         const rows = individualRanking.map((r, i) => [
-            i + 1, `${r.a.name} ${r.a.surname}`, r.a.club || '',
+            i + 1, getAthleteName(r.a), getAthleteClub(r.a),
             fmtScore(r.r1, r.s1), fmtScore(r.r2, r.s2), r.total.toFixed(3),
         ]);
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -130,7 +149,6 @@ export default function ResultsFinalPage() {
 
     async function exportAllToExcel() {
         if (!comp) return;
-        const XLSX = await loadXLSX();
         const wb = XLSX.utils.book_new();
         Object.values(categories).forEach(cat => {
             const r = getScoringRule(cat);
@@ -142,7 +160,7 @@ export default function ResultsFinalPage() {
                 const r1 = res.r1?.total ?? null;
                 const r2 = res.r2?.total ?? null;
                 const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
-                return { name: `${a.name} ${a.surname}`, club: a.club || '', r1, r2, total: tot };
+                return { name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot };
             });
             rows.sort((a, b) => b.total - a.total);
             const aoa = [['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam']];
@@ -260,7 +278,12 @@ export default function ResultsFinalPage() {
                                                 }}>{i + 1}</td>
                                                 <td>
                                                     <div style={{ fontWeight: 700 }}>
-                                                        {row.a.name} {row.a.surname}
+                                                        {row.a.isPair ? (
+                                                            <span>
+                                                                <i className="material-icons-round" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4, color: '#c084fc' }}>sync</i>
+                                                                {row.a.pairName}
+                                                            </span>
+                                                        ) : getAthleteName(row.a)}
                                                     </div>
                                                     <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{row.a.club}</div>
                                                 </td>
@@ -304,7 +327,7 @@ export default function ResultsFinalPage() {
                                                 <td style={{ fontSize: '0.85rem' }}>
                                                     {t.top3.map((r, idx) => (
                                                         <div key={idx}>
-                                                            {r.a.name} {r.a.surname} — <span style={{ color: '#38bdf8' }}>{r.total.toFixed(3)}</span>
+                                                            {getAthleteName(r.a)} — <span style={{ color: '#38bdf8' }}>{r.total.toFixed(3)}</span>
                                                         </div>
                                                     ))}
                                                 </td>
