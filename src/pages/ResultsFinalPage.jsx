@@ -93,19 +93,17 @@ export default function ResultsFinalPage() {
         if (!currentCat) return [];
 
         const rows = [];
-        const addedIds = new Set(); // Tekrar eklemeyi önle
 
         if (isSync) {
-            // --- Sync kategorisi ---
-
-            // 1. Pair tabanlı sonuçlar (çift oluşturulmuş)
+            // --- Sync kategorisi: SADECE pair tabanlı sonuçlar ---
+            // Senkronize kategorisinde çiftsiz sporcu olmaz.
             const catPairs = Object.values(pairs).filter(p => p.categoryId === currentCat.id);
             catPairs.forEach(pair => {
                 const res = scores[pair.id] || {};
                 const r1d = res.r1 || null;
                 const r2d = res.r2 || null;
-                const r1 = r1d?.total ?? null;
-                const r2 = r2d?.total ?? null;
+                const r1  = r1d?.total ?? null;
+                const r2  = r2d?.total ?? null;
                 let total = 0;
                 if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
                 else total = (r1 || 0) + (r2 || 0);
@@ -123,37 +121,7 @@ export default function ResultsFinalPage() {
                     r1, r2, total,
                     r1d, r2d,
                     s1: r1d?.status, s2: r2d?.status,
-                    hasPair: true,
                 });
-                // Bu çiftin sporcularını "zaten işlendi" olarak işaretle
-                addedIds.add(pair.athlete1Id);
-                addedIds.add(pair.athlete2Id);
-                addedIds.add(pair.id);
-            });
-
-            // 2. Pair oluşturulmamış bireysel sporcular (sync kategorisinde ama çiftsiz)
-            athletes.forEach(a => {
-                if (addedIds.has(a.id)) return;
-                const inCat = a.category === currentCat.id || a.catId === currentCat.id || a.categoryId === currentCat.id;
-                if (!inCat) return;
-
-                const res = scores[a.id] || {};
-                const r1d = res.r1 || null;
-                const r2d = res.r2 || null;
-                const r1 = r1d?.total ?? null;
-                const r2 = r2d?.total ?? null;
-                let total = 0;
-                if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                else total = (r1 || 0) + (r2 || 0);
-
-                rows.push({
-                    a,
-                    r1, r2, total,
-                    r1d, r2d,
-                    s1: r1d?.status, s2: r2d?.status,
-                    hasPair: false, // çiftsiz bireysel
-                });
-                addedIds.add(a.id);
             });
 
         } else {
@@ -247,10 +215,9 @@ export default function ResultsFinalPage() {
             const catIsSync = cat.type === 'sync';
             const aoa = [['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam']];
             const rows = [];
-            const addedIds2 = new Set();
 
             if (catIsSync) {
-                // Pair sonuçları
+                // Sync: sadece pair sonuçları
                 Object.values(pairs)
                     .filter(p => p.categoryId === cat.id)
                     .forEach(pair => {
@@ -259,19 +226,6 @@ export default function ResultsFinalPage() {
                         const r2 = res.r2?.total ?? null;
                         const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
                         rows.push({ name: pair.displayName, club: pair.club || '', r1, r2, total: tot });
-                        addedIds2.add(pair.athlete1Id);
-                        addedIds2.add(pair.athlete2Id);
-                        addedIds2.add(pair.id);
-                    });
-                // Çiftsiz bireysel
-                athletes
-                    .filter(a => (a.category === cat.id || a.catId === cat.id) && !addedIds2.has(a.id))
-                    .forEach(a => {
-                        const res = scores[a.id] || {};
-                        const r1 = res.r1?.total ?? null;
-                        const r2 = res.r2?.total ?? null;
-                        const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
-                        rows.push({ name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot });
                     });
             } else {
                 athletes
@@ -449,15 +403,6 @@ export default function ResultsFinalPage() {
                                                                 <i className="material-icons-round" style={{ fontSize: 14, color: '#c084fc' }}>sync</i>
                                                             )}
                                                             {row.a.pairName || getAthleteName(row.a)}
-                                                            {row.hasPair === false && isSync && (
-                                                                <span style={{
-                                                                    fontSize: '0.65rem', background: 'rgba(251,191,36,0.15)',
-                                                                    color: '#fbbf24', padding: '1px 6px', borderRadius: 4,
-                                                                    border: '1px solid rgba(251,191,36,0.3)',
-                                                                }}>
-                                                                    çiftsiz
-                                                                </span>
-                                                            )}
                                                         </div>
                                                         <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
                                                             {getAthleteClub(row.a) || row.a.club || '—'}

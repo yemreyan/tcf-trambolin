@@ -467,12 +467,16 @@ export default function CJPPage() {
                 e: parseFloat(eScore.toFixed(2)),
                 t: isSync ? 0 : tVal,
                 h: parseFloat(hEffective.toFixed(3)),
+                h1: isSync ? h1Val : null,
+                h2: isSync ? h2Val : null,
                 s: parseFloat(sEffective.toFixed(3)),
                 sRaw: isSync ? sVal : 0,
                 p: pVal,
                 total: parseFloat(totalScore.toFixed(3)),
-                isPair: isSync && !!selected?.pairId,
+                // isPair: sync kategorisinde her zaman true (pair oluşturulmamış olsa bile)
+                isPair: isSync,
                 pairName: selected?.pairName || null,
+                routine: activeRoutine,
                 timestamp: Date.now(),
             });
             toast('Puan yayınlandı!', 'success');
