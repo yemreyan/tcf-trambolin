@@ -131,18 +131,26 @@ export default function RegistrationPage() {
         return ids;
     }, [pairList]);
 
+    // Tüm kategori sporcuları — eşleşmiş ve eşleşmemiş birlikte
     const filteredSyncAthletes = useMemo(() => {
         if (!pairCatFilter) return [];
-        // Seçili kategori nesnesini bul (ID veya isim bazlı fallback için)
         const selectedCat = categories.find(c => c.id === pairCatFilter);
         const selectedCatName = selectedCat?.name || '';
         return athleteList.filter(a => {
             const aCat = a.category || a.catId || a.categoryId || '';
-            // Önce ID eşleşmesi, sonra isim bazlı fallback
-            const matches = aCat === pairCatFilter || (selectedCatName && aCat === selectedCatName);
-            return matches && !pairedAthleteIds.has(a.id);
+            return aCat === pairCatFilter || (selectedCatName && aCat === selectedCatName);
         });
-    }, [athleteList, pairCatFilter, pairedAthleteIds, categories]);
+    }, [athleteList, pairCatFilter, categories]);
+
+    // Sporcunun çift bilgisini bul
+    const pairOf = useMemo(() => {
+        const map = {}; // athleteId → pair
+        pairList.forEach(p => {
+            map[p.athlete1Id] = p;
+            map[p.athlete2Id] = p;
+        });
+        return map;
+    }, [pairList]);
 
     const filteredPairs = useMemo(() => {
         if (!pairCatFilter) return [];
@@ -150,11 +158,12 @@ export default function RegistrationPage() {
     }, [pairList, pairCatFilter]);
 
     function togglePairSel(ath) {
+        // Zaten bir çiftte ise seçilemez
+        if (pairOf[ath.id]) return;
         if (pairSelA?.id === ath.id) { setPairSelA(null); return; }
         if (pairSelB?.id === ath.id) { setPairSelB(null); return; }
         if (!pairSelA) { setPairSelA(ath); return; }
         if (!pairSelB) { setPairSelB(ath); return; }
-        // already 2 selected: replace B
         setPairSelB(ath);
     }
 
@@ -717,42 +726,60 @@ export default function RegistrationPage() {
                     <div className="card-body">
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-                            {/* Eşleştirilmemiş Sporcular */}
+                            {/* Sol: Tüm sporcular — eşleşmiş + eşleşmemiş */}
                             <div>
                                 <div style={{ fontWeight: 700, marginBottom: 10, color: '#94a3b8', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                    EŞLEŞTİRİLMEMİŞ ({filteredSyncAthletes.length})
+                                    KATEGORİ SPORCULAR ({filteredSyncAthletes.length})
                                 </div>
                                 {filteredSyncAthletes.length === 0 && (
                                     <div className="text-muted" style={{ fontSize: '0.85rem', padding: '16px 0' }}>
-                                        Bu kategoride eşleştirilmemiş sporcu yok.
+                                        Bu kategoride sporcu yok.
                                     </div>
                                 )}
                                 {filteredSyncAthletes.map(a => {
+                                    const pair = pairOf[a.id];
+                                    const isPaired = !!pair;
                                     const isSelA = pairSelA?.id === a.id;
                                     const isSelB = pairSelB?.id === a.id;
                                     const isSel = isSelA || isSelB;
+                                    // Çiftteyse partneri bul
+                                    const partnerId = pair ? (pair.athlete1Id === a.id ? pair.athlete2Id : pair.athlete1Id) : null;
+                                    const partner = partnerId ? athletes[partnerId] : null;
                                     return (
                                         <div key={a.id}
-                                            onClick={() => togglePairSel(a)}
+                                            onClick={() => !isPaired && togglePairSel(a)}
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: 10,
                                                 padding: '8px 12px', borderRadius: 8, marginBottom: 6,
-                                                cursor: 'pointer',
-                                                background: isSel ? 'rgba(192,132,252,0.2)' : 'rgba(255,255,255,0.05)',
-                                                border: isSel ? '1.5px solid #c084fc' : '1px solid rgba(255,255,255,0.1)',
+                                                cursor: isPaired ? 'default' : 'pointer',
+                                                background: isPaired ? 'rgba(34,197,94,0.08)' : isSel ? 'rgba(192,132,252,0.2)' : 'rgba(255,255,255,0.05)',
+                                                border: isPaired ? '1px solid rgba(34,197,94,0.3)' : isSel ? '1.5px solid #c084fc' : '1px solid rgba(255,255,255,0.1)',
                                                 transition: 'all 0.15s',
                                             }}>
                                             <div style={{
                                                 width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                background: isSel ? '#c084fc' : 'rgba(255,255,255,0.1)',
-                                                fontSize: '0.7rem', fontWeight: 700, color: isSel ? '#fff' : '#94a3b8',
+                                                background: isPaired ? 'rgba(34,197,94,0.3)' : isSel ? '#c084fc' : 'rgba(255,255,255,0.1)',
+                                                fontSize: '0.65rem', fontWeight: 700,
+                                                color: isPaired ? '#4ade80' : isSel ? '#fff' : '#94a3b8',
                                                 flexShrink: 0,
                                             }}>
-                                                {isSelA ? '1' : isSelB ? '2' : '○'}
+                                                {isPaired ? '✓' : isSelA ? '1' : isSelB ? '2' : '○'}
                                             </div>
-                                            <div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{getAthleteName(a)}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{getAthleteClub(a) || '—'}</div>
+                                                {isPaired && partner && (
+                                                    <div style={{ fontSize: '0.72rem', color: '#4ade80', marginTop: 1 }}>
+                                                        <i className="material-icons-round" style={{ fontSize: 11, verticalAlign: 'middle', marginRight: 2 }}>link</i>
+                                                        {getAthleteName(partner)} ile çift
+                                                    </div>
+                                                )}
+                                                {isPaired && !partner && (
+                                                    <div style={{ fontSize: '0.72rem', color: '#4ade80', marginTop: 1 }}>
+                                                        <i className="material-icons-round" style={{ fontSize: 11, verticalAlign: 'middle', marginRight: 2 }}>link</i>
+                                                        {pair.displayName}
+                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{getAthleteClub(a) || '—'}</div>
                                             </div>
                                         </div>
                                     );
@@ -761,8 +788,8 @@ export default function RegistrationPage() {
                                 {(pairSelA || pairSelB) && (
                                     <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(192,132,252,0.1)', borderRadius: 8, border: '1px solid rgba(192,132,252,0.3)' }}>
                                         <div style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 600, marginBottom: 6 }}>Seçilenler:</div>
-                                        {pairSelA && <div style={{ fontSize: '0.85rem' }}>① {pairSelA.name} {pairSelA.surname}</div>}
-                                        {pairSelB && <div style={{ fontSize: '0.85rem' }}>② {pairSelB.name} {pairSelB.surname}</div>}
+                                        {pairSelA && <div style={{ fontSize: '0.85rem' }}>① {getAthleteName(pairSelA)}</div>}
+                                        {pairSelB && <div style={{ fontSize: '0.85rem' }}>② {getAthleteName(pairSelB)}</div>}
                                         <button
                                             className="btn btn-primary btn-sm"
                                             style={{ marginTop: 10, width: '100%', background: 'linear-gradient(135deg,#c084fc,#a855f7)' }}
@@ -778,7 +805,7 @@ export default function RegistrationPage() {
                                 )}
                             </div>
 
-                            {/* Mevcut Çiftler */}
+                            {/* Sağ: Mevcut Çiftler */}
                             <div>
                                 <div style={{ fontWeight: 700, marginBottom: 10, color: '#94a3b8', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase' }}>
                                     MEVCUT ÇİFTLER ({filteredPairs.length})
@@ -798,18 +825,19 @@ export default function RegistrationPage() {
                                             background: 'rgba(34,197,94,0.08)',
                                             border: '1px solid rgba(34,197,94,0.25)',
                                         }}>
-                                            <div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#4ade80' }}>
-                                                    <i className="material-icons-round" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }}>link</i>
+                                                    <i className="material-icons-round" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }}>sync</i>
                                                     {pair.displayName}
                                                 </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 3 }}>
-                                                    {a1 ? `${a1.name} ${a1.surname}` : pair.athlete1Id} &nbsp;+&nbsp; {a2 ? `${a2.name} ${a2.surname}` : pair.athlete2Id}
+                                                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 4 }}>
+                                                    <div>① {a1 ? getAthleteName(a1) : pair.athlete1Id}</div>
+                                                    <div>② {a2 ? getAthleteName(a2) : pair.athlete2Id}</div>
                                                 </div>
-                                                {pair.club && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{pair.club}</div>}
+                                                {pair.club && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>{pair.club}</div>}
                                             </div>
                                             <button className="btn btn-sm btn-outline"
-                                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', flexShrink: 0 }}
+                                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', flexShrink: 0, marginLeft: 8 }}
                                                 onClick={() => handleDissolvePair(pair)}
                                                 title="Çifti Boz">
                                                 <i className="material-icons-round">link_off</i>

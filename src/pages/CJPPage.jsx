@@ -231,16 +231,19 @@ export default function CJPPage() {
                 finalAthletes.forEach(ath => {
                     if (!ath) return;
                     // Her zaman güncel globalAthletes verisini önce al
-                    // (startList anlık görüntüde eski/boş isimler olabilir)
+                    // (startList anlık görüntüde eski/boş isimler veya eksik pairId olabilir)
                     const fresh = globalAthletes[ath.id] || {};
                     const mergedName    = (ath.name    || '').trim() || (fresh.name    || fresh.ad      || fresh.firstName || '');
                     const mergedSurname = (ath.surname || '').trim() || (fresh.surname || fresh.soyad   || fresh.lastName  || '');
                     const mergedClub    = (ath.club    || '').trim() || (fresh.club    || fresh.kulup   || '');
+                    // pairId: startList snapshot'tan gelmeyebilir — fresh (globalAthletes) verisi öncelikli
+                    const mergedPairId  = fresh.pairId ?? ath.pairId ?? null;
                     list.push({
                         ...ath,
                         name: mergedName,
                         surname: mergedSurname,
                         club: mergedClub,
+                        pairId: mergedPairId,
                         catId: cat.id, catName: cat.name, catType: cat.type ?? null, uniqueId: ath.id,
                     });
                 });
