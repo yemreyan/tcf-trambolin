@@ -132,15 +132,21 @@ export default function RegistrationPage() {
     }, [pairList]);
 
     // Tüm kategori sporcuları — eşleşmiş ve eşleşmemiş birlikte
+    // Önce filterCat == pairCatFilter ise displayedAthletes'i kullan (her zaman doğru).
+    // Aksi hâlde athleteList'ten tüm olası alanlar kontrol edilerek geniş eşleşme yapılır.
     const filteredSyncAthletes = useMemo(() => {
         if (!pairCatFilter) return [];
+        // Eğer ana filtre ile pair filtresi aynı kategoriyse, displayedAthletes kesinlikle doğrudur.
+        if (filterCat === pairCatFilter && displayedAthletes.length > 0) return displayedAthletes;
+        // Farklıysa (örn. sadece pair dropdown'dan seçildi) doğrudan filtrele.
         const selectedCat = categories.find(c => c.id === pairCatFilter);
         const selectedCatName = selectedCat?.name || '';
         return athleteList.filter(a => {
-            const aCat = a.category || a.catId || a.categoryId || '';
-            return aCat === pairCatFilter || (selectedCatName && aCat === selectedCatName);
+            // Tüm olası kategori alanlarını kontrol et — ID veya isim bazlı
+            const fields = [a.category, a.catId, a.categoryId].filter(Boolean);
+            return fields.some(f => f === pairCatFilter || (selectedCatName && f === selectedCatName));
         });
-    }, [athleteList, pairCatFilter, categories]);
+    }, [athleteList, displayedAthletes, filterCat, pairCatFilter, categories]);
 
     // Sporcunun çift bilgisini bul
     const pairOf = useMemo(() => {
