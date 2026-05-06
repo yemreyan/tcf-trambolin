@@ -21,7 +21,8 @@ import { db } from '../lib/firebase';
 export default function ScoreboardPage() {
     const [params] = useSearchParams();
     const compId = params.get('comp') || localStorage.getItem('tra_active_comp');
-    const panel   = params.get('panel') || 'A';
+    const panel   = params.get('panel') || localStorage.getItem('scoreboard_panel') || 'A';
+    if (params.get('panel')) localStorage.setItem('scoreboard_panel', params.get('panel'));
 
     const [compName,    setCompName]    = useState('');
     const [activeCtx,   setActiveCtx]   = useState(null);
@@ -362,6 +363,35 @@ export default function ScoreboardPage() {
                                     {result.total?.toFixed(3)}
                                 </div>
                             </div>
+                        {/* Element Deduction Timeline — HTML scoreboard ile aynı */}
+                        {result?.elementDeductions?.length > 0 && (
+                            <div style={{
+                                display: 'flex', flexWrap: 'wrap', gap: 8,
+                                justifyContent: 'center', paddingTop: 4,
+                            }}>
+                                {result.elementDeductions.map((val, idx) => (
+                                    <div key={idx} style={{
+                                        background: 'rgba(255,255,255,0.05)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: 8, width: 62, height: 64,
+                                        display: 'flex', flexDirection: 'column',
+                                        alignItems: 'center', justifyContent: 'center',
+                                        gap: 2,
+                                    }}>
+                                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700 }}>
+                                            S{idx + 1}
+                                        </div>
+                                        <div style={{
+                                            fontFamily: "'Space Mono', monospace",
+                                            fontSize: '1.25rem', fontWeight: 700,
+                                            color: val === 0 ? '#10b981' : val >= 0.4 ? '#f87171' : 'white',
+                                        }}>
+                                            {val.toFixed(1)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                         </>
                     ) : (
                         <div style={{

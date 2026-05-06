@@ -99,7 +99,18 @@ export default function PanelPage() {
 
                     <MenuCard
                         icon="stars" title="Başhakem (CJP)" desc="Sporcu Çağır / T-H-S Girişi"
-                        onClick={() => window.open(`/cjp?comp=${compId}`, '_blank')}
+                        onClick={() => {
+                            // Panel seçilmeden CJP açılamaz — hakem modal üzerinden açılmalı
+                            if (panelIds.length === 1) {
+                                // Tek panel varsa direkt aç
+                                window.open(`/cjp?panel=${panelIds[0]}&comp=${compId}`, '_blank');
+                            } else {
+                                // Çoklu / sıfır panel → modal ile seç
+                                setStep('groups');
+                                setSelectedPanelId(null);
+                                setJudgeModal(true);
+                            }
+                        }}
                         accentColor="var(--accent-primary)"
                     />
 
@@ -108,7 +119,7 @@ export default function PanelPage() {
 
                     <MenuCard
                         icon="monitor_heart" title="Canlı Sonuçlar" desc="TV Ekranı (Salondaki TV)"
-                        onClick={() => window.open(`/results/live?id=${compId}`, '_blank')}
+                        onClick={() => window.open(`/results/live?comp=${compId}`, '_blank')}
                         accentColor="#1e293b"
                     />
 
@@ -215,10 +226,19 @@ export default function PanelPage() {
                                     <h5 style={{ color: '#94a3b8', marginBottom: 10, fontSize: '0.8rem', letterSpacing: 1 }}>BAŞHAKEM (CJP)</h5>
                                     <button
                                         className="btn w-100"
-                                        style={{ background: 'linear-gradient(135deg, #f43f5e, #be123c)', color: 'white', marginBottom: 20 }}
+                                        style={{ background: 'linear-gradient(135deg, #f43f5e, #be123c)', color: 'white', marginBottom: 10 }}
                                         onClick={openCJP}
                                     >
                                         <i className="material-icons-round">stars</i> BAŞHAKEM PANELİ
+                                    </button>
+
+                                    <h5 style={{ color: '#94a3b8', marginBottom: 10, fontSize: '0.8rem', letterSpacing: 1 }}>SKORBOARD</h5>
+                                    <button
+                                        className="btn btn-outline w-100"
+                                        style={{ marginBottom: 20 }}
+                                        onClick={() => window.open(`/scoreboard?panel=${selectedPanelId}&comp=${compId}`, '_blank')}
+                                    >
+                                        <i className="material-icons-round">tv</i> SKORBOARD — Panel {juryPanels[selectedPanelId]?.name || selectedPanelId}
                                     </button>
                                 </div>
                             )}

@@ -213,7 +213,44 @@ export default function JudgeCockpitPage() {
                     </div>
                 </header>
 
-                {/* Body — D hakem tek değer girişi */}
+                {/* Submit Overlay — puanlar gönderildikten sonra ekranı kilitle */}
+                {submitted && (
+                    <div style={{
+                        position: 'fixed', inset: 0, zIndex: 200,
+                        background: 'rgba(0,0,0,0.92)',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        gap: 20,
+                    }}>
+                        <div style={{
+                            width: 100, height: 100, borderRadius: '50%',
+                            background: 'rgba(16,185,129,0.15)',
+                            border: '3px solid #10b981',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: '0 0 60px rgba(16,185,129,0.4)',
+                        }}>
+                            <i className="material-icons-round" style={{ fontSize: 52, color: '#10b981' }}>check_circle</i>
+                        </div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', letterSpacing: 2 }}>
+                            PUAN GÖNDERİLDİ
+                        </div>
+                        <div style={{
+                            fontFamily: "'Space Mono', monospace",
+                            fontSize: '4rem', fontWeight: 700, color: 'white',
+                            textShadow: '0 0 40px rgba(16,185,129,0.6)',
+                        }}>
+                            {parseFloat(dVal || 0).toFixed(1)}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#64748b', marginTop: 8 }}>
+                            {athlete ? getAthleteName(athlete) : '—'}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 20, letterSpacing: 1 }}>
+                            Yeni sporcu çağrıldığında ekran açılır
+                        </div>
+                    </div>
+                )}
+
+            {/* Body — D hakem tek değer girişi */}
                 <div style={{ paddingTop: 90, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '90px 24px 160px', maxWidth: 500, margin: '0 auto' }}>
                     <div style={{ fontSize: '0.9rem', color: '#888', letterSpacing: 2, marginBottom: 24, textAlign: 'center' }}>
                         ZORLUK DEĞERİ (D)
@@ -339,7 +376,7 @@ export default function JudgeCockpitPage() {
                             HAKEM {roleLabel}
                         </div>
                         <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                            {athlete ? `${athlete.surname || ''} ${athlete.name || ''}`.trim() : 'SPORCU BEKLENİYOR...'}
+                            {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR...'}
                         </div>
                     </div>
                 </div>
@@ -350,6 +387,43 @@ export default function JudgeCockpitPage() {
                     </div>
                 </div>
             </header>
+
+            {/* Submit Overlay — E hakem */}
+            {submitted && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 200,
+                    background: 'rgba(0,0,0,0.92)',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    gap: 20,
+                }}>
+                    <div style={{
+                        width: 100, height: 100, borderRadius: '50%',
+                        background: 'rgba(16,185,129,0.15)',
+                        border: '3px solid #10b981',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 60px rgba(16,185,129,0.4)',
+                    }}>
+                        <i className="material-icons-round" style={{ fontSize: 52, color: '#10b981' }}>check_circle</i>
+                    </div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', letterSpacing: 2 }}>
+                        PUAN GÖNDERİLDİ
+                    </div>
+                    <div style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: '4rem', fontWeight: 700, color: 'white',
+                        textShadow: '0 0 40px rgba(16,185,129,0.6)',
+                    }}>
+                        {eTotal.toFixed(1)}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                        {athlete ? getAthleteName(athlete) : '—'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 20, letterSpacing: 1 }}>
+                        Yeni sporcu çağrıldığında ekran açılır
+                    </div>
+                </div>
+            )}
 
             {/* Body */}
             <div style={{ paddingTop: 80, paddingBottom: 120, overflowY: 'auto', height: '100vh', scrollBehavior: 'smooth' }}>
@@ -364,6 +438,7 @@ export default function JudgeCockpitPage() {
                             isFocused={focused === i}
                             options={DEDUCT_OPTIONS}
                             onTap={(val) => tap(i, val)}
+                            disabled={submitted}
                         />
                     ))}
 
@@ -376,6 +451,7 @@ export default function JudgeCockpitPage() {
                             options={LANDING_OPTIONS}
                             onTap={tapLanding}
                             label="İNİŞ (L)"
+                            disabled={submitted}
                         />
                     </div>
                 </div>
@@ -419,7 +495,7 @@ export default function JudgeCockpitPage() {
 }
 
 // ── JumpCard Alt Bileşeni ─────────────────────────────────────────────────
-function JumpCard({ index, value, isFocused, options, onTap, label }) {
+function JumpCard({ index, value, isFocused, options, onTap, label, disabled }) {
     const cardRef = useRef(null);
 
     useEffect(() => {
@@ -463,17 +539,21 @@ function JumpCard({ index, value, isFocused, options, onTap, label }) {
                     return (
                         <button
                             key={val}
-                            onClick={() => onTap(val)}
+                            onClick={() => !disabled && onTap(val)}
+                            disabled={disabled}
                             style={{
                                 aspectRatio: 1,
                                 background: isSelected ? (dc ? dc.bg : '#fff') : '#222',
                                 border: 'none', borderRadius: 8,
                                 color: isSelected ? (dc ? dc.color : '#000') : '#888',
                                 fontFamily: "'Space Mono', monospace", fontSize: '1rem',
-                                fontWeight: 700, cursor: 'pointer', transition: 'all 0.1s',
+                                fontWeight: 700,
+                                cursor: disabled ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.1s',
+                                opacity: disabled ? 0.5 : 1,
                                 boxShadow: isSelected && !dc ? '0 0 15px rgba(255,255,255,0.5)' : 'none',
                             }}
-                            onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.9)'; }}
+                            onPointerDown={e => { if (!disabled) e.currentTarget.style.transform = 'scale(0.9)'; }}
                             onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
                         >
                             {val}

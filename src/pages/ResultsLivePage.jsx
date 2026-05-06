@@ -29,7 +29,7 @@ const CYCLE_MS = 8000;
 
 export default function ResultsLivePage() {
     const [params] = useSearchParams();
-    const compId = params.get('comp') || localStorage.getItem('tra_active_comp');
+    const compId = params.get('comp') || params.get('id') || localStorage.getItem('tra_active_comp');
 
     const [compName,    setCompName]    = useState('');
     const [categories,  setCategories]  = useState({});
@@ -102,16 +102,22 @@ export default function ResultsLivePage() {
         return () => clearInterval(t);
     }, []);
 
+    // Kategori eşleştirme — id, isim veya tüm bilinen alanlardan biri uyuşursa true
+    function athleteInCategory(a, cat) {
+        if (!a || !cat) return false;
+        const candidates = [a.category, a.categoryId, a.catId].filter(v => v != null && v !== '');
+        return candidates.some(v => v === cat.id || v === cat.name);
+    }
+
     // ── Sayfa görünümü listesi (kategori × sayfa) ─────────────────────────
     const views = useMemo(() => {
         const list = Object.values(categories).filter(c => !excluded.includes(c.id));
         const out = [];
         list.forEach(cat => {
-            const count = cat.type === 'sync'
-                ? pairs.filter(p => p.categoryId === cat.id).length
-                : athletes.filter(a =>
-                    a.category === cat.id || a.categoryId === cat.id || a.catId === cat.id
-                  ).length;
+            const catPairsCount = pairs.filter(p => p.categoryId === cat.id || p.categoryId === cat.name).length;
+            const count = (cat.type === 'sync' && catPairsCount > 0)
+                ? catPairsCount
+                : athletes.filter(a => athleteInCategory(a, cat)).length;
             const totalPages = Math.max(1, Math.ceil(count / ATHLETES_PER_PAGE));
             for (let p = 0; p < totalPages; p++) {
                 out.push({ cat, page: p, totalPages });
@@ -139,37 +145,44 @@ export default function ResultsLivePage() {
         const isSync = cat.type === 'sync';
 
         if (isSync) {
-            // Sync: SADECE pair tabanlı — çiftsiz sporcu olmaz
-            const catPairs = pairs.filter(p => p.categoryId === cat.id);
-            const rows = catPairs.map(pair => {
-                const res = scores[pair.id] || {};
-                const r1  = res.r1?.total ?? null;
-                const r2  = res.r2?.total ?? null;
-                const s1  = res.r1?.status;
-                const s2  = res.r2?.status;
-                let total = 0;
-                if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                else total = (r1 || 0) + (r2 || 0);
-                return {
-                    a: {
-                        id: pair.id,
-                        name: pair.displayName,
-                        surname: '',
-                        club: pair.club || '',
-                        isPair: true,
-                        pairName: pair.displayName,
-                    },
-                    r1, r2, s1, s2, total,
-                };
-            });
-            rows.sort((a, b) => b.total - a.total);
-            return rows;
+            const catPairs = pairs.filter(p => p.categoryId === cat.id || p.categoryId === cat.name);
+
+            if (catPairs.length > 0) {
+                // Pair tabanlı sıralama
+                const rows = catPairs.map(pair => {
+                    // Pair ID ile önce ara; pair oluşturulmadan puanlandıysa bireysel ID ile dene
+                    const res = scores[pair.id]
+                        || scores[pair.athlete1Id]
+                        || scores[pair.athlete2Id]
+                        || {};
+                    const r1  = res.r1?.total ?? null;
+                    const r2  = res.r2?.total ?? null;
+                    const s1  = res.r1?.status;
+                    const s2  = res.r2?.status;
+                    let total = 0;
+                    if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
+                    else total = (r1 || 0) + (r2 || 0);
+                    return {
+                        a: {
+                            id: pair.id,
+                            name: pair.displayName,
+                            surname: '',
+                            club: pair.club || '',
+                            isPair: true,
+                            pairName: pair.displayName,
+                        },
+                        r1, r2, s1, s2, total,
+                    };
+                });
+                rows.sort((a, b) => b.total - a.total);
+                return rows;
+            }
+
+            // Çift oluşturulmamış sync → bireysel sporcuları göster (fallback)
         }
 
-        // Bireysel
-        const filtered = athletes.filter(a =>
-            a.category === cat.id || a.categoryId === cat.id || a.catId === cat.id
-        );
+        // Bireysel (sync fallback dahil — id veya isim eşleşmesi)
+        const filtered = athletes.filter(a => athleteInCategory(a, cat));
         const rows = filtered.map(a => {
             const res = scores[a.uniqueId] || scores[a.id] || {};
             const r1  = res.r1?.total ?? null;
@@ -258,9 +271,7 @@ export default function ResultsLivePage() {
                 )}
                 {currentView && pageRows.length === 0 && (
                     <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}>
-                        {currentView.cat.type === 'sync'
-                            ? 'Henüz çift oluşturulmamış veya puanlanmamış.'
-                            : 'Bu kategoride sporcu/puan yok.'}
+                        Bu kategoride sporcu/puan yok.
                     </div>
                 )}
                 {pageRows.map((row, i) => {

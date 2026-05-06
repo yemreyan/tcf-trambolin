@@ -76,6 +76,26 @@ function calcEScore(judgesData, elementCount = 10) {
     return Math.max(0, base - totalDeduction);
 }
 
+// ── Element Deductions Dizisi (Scoreboard timeline için) ─────────────────
+// Her element için 6 hakemden trim edilen geçerli toplam → dizi döner
+function calcElementDeductions(judgesData, elementCount = 10) {
+    const result = [];
+    for (let i = 0; i < elementCount; i++) {
+        let vals = [];
+        for (let j = 1; j <= 6; j++) {
+            const d = judgesData[`e${j}`];
+            if (d?.deductions?.[i] !== undefined) vals.push(parseFloat(d.deductions[i]));
+        }
+        if (vals.length >= 6) {
+            vals.sort((a, b) => a - b); vals.pop(); vals.pop(); vals.shift(); vals.shift();
+        } else if (vals.length >= 4) {
+            vals.sort((a, b) => a - b); vals.pop(); vals.shift();
+        }
+        result.push(parseFloat(vals.reduce((a, b) => a + b, 0).toFixed(3)));
+    }
+    return result;
+}
+
 // ── D Skor (D hakeminden okur — key: 'd', alan: 'val') ───────────────────
 // Not: HTML CJP judges['d'].val formatı. JudgeCockpitPage de 'd' key + val yazar.
 function getDScoreFromJudge(judgesData) {
@@ -93,6 +113,8 @@ export default function CJPPage() {
 
     const compId = params.get('comp') || localStorage.getItem('tra_active_comp');
     const panelParam = params.get('panel') || localStorage.getItem('cjp_panel') || 'A';
+    // Sonraki açılışlarda hatırla
+    if (params.get('panel')) localStorage.setItem('cjp_panel', params.get('panel'));
 
     // ── Ekran Kilidi ──────────────────────────────────────────────────────
     const [unlocked, setUnlocked] = useState(false);
@@ -291,6 +313,7 @@ export default function CJPPage() {
         setCurrentStatus(null);
         setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
         setDInput('');
+        setJudgesData({});   // Eski sporcunun hakem puanlarını temizle
         setElementCount(10);
         setActiveRoutine(1);
 
@@ -352,8 +375,9 @@ export default function CJPPage() {
         });
     }
 
-    // ── Canlı Önizleme — Scoreboard'a anlık yaz (HTML calcWithoutSave eşleniği) ──
-    // Hakem verisi veya CJP inputları değişince panele isLive:true yazar
+    // ── Canlı Önizleme — SADECE CJP önizlemesi için (scoreboard görmez) ──
+    // Önizleme verisi scores/preview yoluna yazılır.
+    // Scoreboard scores/current'ı okur → yalnızca publish sonrası veri görünür.
     useEffect(() => {
         if (!selected || !compId || isLocked) return;
         const hasStarted =
@@ -372,17 +396,18 @@ export default function CJPPage() {
             d: dVal,
             t: isSync ? 0 : tVal,
             h: parseFloat(hEffective.toFixed(3)),
-            h1: isSync ? h1Val : null,   // undefined → null (Firebase undefined kabul etmez)
+            h1: isSync ? h1Val : null,
             h2: isSync ? h2Val : null,
             s: parseFloat(sEffective.toFixed(3)),
             sRaw: isSync ? sVal : 0,
             p: pVal, dp: dpVal,
             total: parseFloat(totalScore.toFixed(3)),
             status: currentStatus || null,
-            isPair: isSync && !!selected?.pairId,
+            isPair: isSync,
             pairName: selected?.pairName || null,
         };
-        set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), previewData).catch(() => {});
+        // scores/preview → sadece CJP kendi önizlemesi için (scoreboard okumaz)
+        set(ref(db, `live/${compId}/panels/${currentPanel}/scores/preview`), previewData).catch(() => {});
     }, [judgesData, inpT, inpH, inpH2, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
 
     // ── Sahaya Çağır ──────────────────────────────────────────────────────
@@ -405,6 +430,11 @@ export default function CJPPage() {
         // Hakem ekranlarını temizle
         await remove(ref(db, `live/${compId}/panels/${currentPanel}/scores/judges`));
         setJudgesData({});
+
+        // Scoreboard'daki eski skoru temizle (yeni sporcu çağrıldığında eski skor kalmasın)
+        await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), null);
+        // Önizleme verisini de temizle
+        await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/preview`), null);
 
         toast(`${displayLabel} sahaya çağrıldı — ${activeRoutine}. Seri`, 'success');
     }
@@ -477,6 +507,29 @@ export default function CJPPage() {
                 isPair: isSync,
                 pairName: selected?.pairName || null,
                 routine: activeRoutine,
+                timestamp: Date.now(),
+            });
+            // Scoreboard için panel-spesifik yola da yaz (scores/current = yalnızca yayınlanan)
+            const elDeds = calcElementDeductions(judgesData, elementCount);
+            await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), {
+                athleteName: displayLabel,
+                club: getAthleteClub(selected),
+                d: dVal,
+                e: parseFloat(eScore.toFixed(2)),
+                t: isSync ? 0 : tVal,
+                h: parseFloat(hEffective.toFixed(3)),
+                h1: isSync ? h1Val : null,
+                h2: isSync ? h2Val : null,
+                s: parseFloat(sEffective.toFixed(3)),
+                sRaw: isSync ? sVal : 0,
+                p: pVal,
+                dp: dpVal,
+                total: parseFloat(totalScore.toFixed(3)),
+                isPair: isSync,
+                pairName: selected?.pairName || null,
+                routine: activeRoutine,
+                status: 'published',
+                elementDeductions: elDeds,   // Scoreboard timeline için
                 timestamp: Date.now(),
             });
             toast('Puan yayınlandı!', 'success');
@@ -928,6 +981,11 @@ export default function CJPPage() {
                         <span>{isSubmitting ? 'YAYINLANIYOR...' : 'YAYINLA'}</span>
                     </button>
                 </div>
+
+                {/* Hakem Analiz Tablosu — HUD'un altında, tam genişlik */}
+                {Object.keys(judgesData).some(k => k.startsWith('e') && judgesData[k]?.deductions) && (
+                    <JudgeAnalysisTable judgesData={judgesData} elementCount={elementCount} />
+                )}
             </div>
 
             {/* Kilit Aç Popup */}
@@ -1036,4 +1094,144 @@ function unlockBtnStyle(color) {
         border: `1px solid ${color}40`, background: `${color}15`, color,
         fontSize: '0.95rem', display: 'block', marginBottom: 8,
     };
+}
+
+// ── Hakem Analiz Tablosu ──────────────────────────────────────────────────────
+// HTML cjp.html renderJudgeAnalysis() ile aynı mantık:
+// Satır = E1-E6, Sütun = S1-Sn + L + Σ
+// Renk: maks değer kırmızı, min değer mavi, geçerli (trimmed) satır alt footer'da
+function JudgeAnalysisTable({ judgesData, elementCount }) {
+    // Per-sütun min/max tespiti
+    const colStats = [];
+    for (let i = 0; i < elementCount; i++) {
+        const vals = [];
+        for (let j = 1; j <= 6; j++) {
+            const d = judgesData[`e${j}`];
+            if (d?.deductions?.[i] !== undefined) vals.push(parseFloat(d.deductions[i]));
+        }
+        colStats.push(vals.length > 0
+            ? { min: Math.min(...vals), max: Math.max(...vals) }
+            : { min: null, max: null }
+        );
+    }
+
+    // Geçerli (trimmed) sütun toplamları — HTML ile aynı FIG mantığı
+    const validSums = [];
+    for (let i = 0; i < elementCount; i++) {
+        let vals = [];
+        for (let j = 1; j <= 6; j++) {
+            const d = judgesData[`e${j}`];
+            if (d?.deductions?.[i] !== undefined) vals.push(parseFloat(d.deductions[i]));
+        }
+        if (vals.length >= 6) {
+            vals.sort((a, b) => a - b); vals.pop(); vals.pop(); vals.shift(); vals.shift();
+        } else if (vals.length >= 4) {
+            vals.sort((a, b) => a - b); vals.pop(); vals.shift();
+        }
+        validSums.push(vals.reduce((a, b) => a + b, 0));
+    }
+
+    // Landing trimming
+    const landingVals = [];
+    for (let j = 1; j <= 6; j++) {
+        const d = judgesData[`e${j}`];
+        if (d?.landing !== undefined && d.landing !== null && d.landing !== '')
+            landingVals.push(parseFloat(d.landing));
+    }
+    let validLanding = 0;
+    if (landingVals.length >= 6) {
+        const lv = [...landingVals].sort((a, b) => a - b);
+        lv.pop(); lv.pop(); lv.shift(); lv.shift();
+        validLanding = lv.reduce((a, b) => a + b, 0);
+    } else if (landingVals.length >= 4) {
+        const lv = [...landingVals].sort((a, b) => a - b);
+        lv.pop(); lv.shift();
+        validLanding = lv.reduce((a, b) => a + b, 0);
+    } else {
+        validLanding = landingVals.reduce((a, b) => a + b, 0);
+    }
+
+    const validTotal = validSums.reduce((a, b) => a + b, 0) + validLanding;
+
+    const cellStyle = (val, colI) => {
+        let bg = 'transparent';
+        const cs = colStats[colI];
+        if (cs && cs.min !== null && cs.min !== cs.max) {
+            if (val === cs.max) bg = 'rgba(239,68,68,0.2)';
+            else if (val === cs.min) bg = 'rgba(59,130,246,0.2)';
+        }
+        return {
+            textAlign: 'center', padding: '5px 6px',
+            borderRight: '1px solid rgba(255,255,255,0.05)',
+            background: bg,
+            color: bg !== 'transparent' ? 'white' : '#cbd5e1',
+            fontSize: '0.78rem',
+        };
+    };
+
+    return (
+        <div style={{
+            marginTop: 16,
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 12, padding: '14px 12px',
+            overflowX: 'auto',
+        }}>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, letterSpacing: 2, marginBottom: 10, textTransform: 'uppercase' }}>
+                Hakem Analiz Tablosu — E Paneli
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                <thead>
+                    <tr>
+                        <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.72rem' }}>HAKEM</th>
+                        {Array.from({ length: elementCount }, (_, i) => (
+                            <th key={i} style={{ textAlign: 'center', padding: '6px 4px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.72rem' }}>
+                                S{i + 1}
+                            </th>
+                        ))}
+                        <th style={{ textAlign: 'center', padding: '6px 4px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.72rem' }}>L</th>
+                        <th style={{ textAlign: 'center', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.72rem' }}>Σ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[1, 2, 3, 4, 5, 6].map(j => {
+                        const jd = judgesData[`e${j}`];
+                        let rowSum = 0;
+                        return (
+                            <tr key={j} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                <td style={{ padding: '5px 8px', fontWeight: 700, color: 'white', fontSize: '0.78rem' }}>E{j}</td>
+                                {Array.from({ length: elementCount }, (_, i) => {
+                                    const val = jd?.deductions?.[i] !== undefined ? parseFloat(jd.deductions[i]) : null;
+                                    if (val !== null) rowSum += val;
+                                    return (
+                                        <td key={i} style={val !== null ? cellStyle(val, i) : { textAlign: 'center', padding: '5px 6px', color: 'rgba(255,255,255,0.15)', fontSize: '0.78rem' }}>
+                                            {val !== null ? val : '—'}
+                                        </td>
+                                    );
+                                })}
+                                <td style={{ textAlign: 'center', padding: '5px 6px', borderRight: '1px solid rgba(255,255,255,0.05)', color: '#cbd5e1', fontSize: '0.78rem' }}>
+                                    {jd?.landing !== undefined && jd.landing !== '' ? (() => { const l = parseFloat(jd.landing); rowSum += l; return l; })() : '—'}
+                                </td>
+                                <td style={{ textAlign: 'center', padding: '5px 8px', fontWeight: 700, color: 'white', fontSize: '0.78rem' }}>
+                                    {jd ? rowSum.toFixed(1) : '—'}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+                <tfoot>
+                    <tr style={{ background: 'rgba(16,185,129,0.08)', borderTop: '1px solid rgba(16,185,129,0.2)' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 700, color: '#10b981', fontSize: '0.72rem' }}>GEÇERLİ</td>
+                        {validSums.map((s, i) => (
+                            <td key={i} style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 700, color: '#10b981', fontSize: '0.78rem' }}>
+                                {s > 0 ? s.toFixed(1) : '0'}
+                            </td>
+                        ))}
+                        <td style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 700, color: '#10b981', fontSize: '0.78rem' }}>{validLanding > 0 ? validLanding.toFixed(1) : '0'}</td>
+                        <td style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 900, color: '#10b981', fontSize: '0.85rem' }}>{validTotal.toFixed(1)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    );
 }
