@@ -177,8 +177,18 @@ export default function ResultsFinalPage() {
             });
         }
 
-        rows.sort((a, b) => b.total - a.total);
-        return rows;
+        // Sporcu sıralama mantığı:
+        // Puanlı satırlar üstte (eşitler aynı rank), puansızlar altta (rank null)
+        const scored   = rows.filter(r => r.r1 != null || r.r2 != null);
+        const unscored = rows.filter(r => r.r1 == null && r.r2 == null);
+        scored.sort((a, b) => b.total - a.total);
+        let lastTotal = null, lastRank = 0;
+        scored.forEach((row, i) => {
+            if (lastTotal !== null && row.total === lastTotal) row.rank = lastRank;
+            else { row.rank = i + 1; lastRank = row.rank; lastTotal = row.total; }
+        });
+        unscored.forEach(r => { r.rank = null; });
+        return [...scored, ...unscored];
     }, [athletes, pairs, scores, currentCat, rule, isSync]);
 
     // ── Takım Sıralaması ──────────────────────────────────────────────────
@@ -224,13 +234,13 @@ export default function ResultsFinalPage() {
     function exportSingleToExcel() {
         if (!currentCat) return;
         const headers = ['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam'];
-        const rows = individualRanking.map((r, i) => [
-            i + 1,
+        const rows = individualRanking.map(r => [
+            r.rank ?? '—',
             r.a.pairName || getAthleteName(r.a),
             getAthleteClub(r.a) || r.a.club || '',
             fmtScore(r.r1, r.s1),
             fmtScore(r.r2, r.s2),
-            r.total.toFixed(3),
+            r.rank != null ? r.total.toFixed(3) : '—',
         ]);
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
@@ -423,21 +433,23 @@ export default function ResultsFinalPage() {
                                             </tr>
                                         )}
                                         {individualRanking.map((row, i) => {
-                                            const medal = i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : i === 2 ? '#CD7F32' : '';
+                                            const rank   = row.rank;          // null = puansız
+                                            const medalC = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '';
+                                            const isMedal = rank != null && rank <= 3;
                                             const detail1 = fmtDetail(row.r1d);
                                             const detail2 = fmtDetail(row.r2d);
                                             return (
                                                 <tr key={row.a.id}
-                                                    style={i < 3 ? { background: `${medal}08` } : {}}>
+                                                    style={isMedal ? { background: `${medalC}08` } : {}}>
                                                     <td style={{
                                                         fontFamily: "'Space Mono',monospace",
-                                                        fontWeight: 700, fontSize: '1.15rem', color: medal || 'inherit',
+                                                        fontWeight: 700, fontSize: '1.15rem', color: medalC || 'inherit',
                                                     }}>
-                                                        {i < 3
-                                                            ? <i className="material-icons-round" style={{ fontSize: 22, color: medal }}>
-                                                                {i === 0 ? 'looks_one' : i === 1 ? 'looks_two' : 'looks_3'}
+                                                        {isMedal
+                                                            ? <i className="material-icons-round" style={{ fontSize: 22, color: medalC }}>
+                                                                {rank === 1 ? 'looks_one' : rank === 2 ? 'looks_two' : 'looks_3'}
                                                               </i>
-                                                            : i + 1}
+                                                            : (rank ?? '—')}
                                                     </td>
                                                     <td>
                                                         <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>

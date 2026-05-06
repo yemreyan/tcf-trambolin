@@ -208,8 +208,7 @@ export default function ResultsLivePage() {
                     rows.push({ a, r1, r2, s1, s2, total });
                 }
             });
-            rows.sort((a, b) => b.total - a.total);
-            return rows;
+            return assignRanks(rows);
         }
 
         // Bireysel kategori
@@ -224,8 +223,30 @@ export default function ResultsLivePage() {
             else total = (r1 || 0) + (r2 || 0);
             return { a, r1, r2, s1, s2, total };
         });
-        rows.sort((a, b) => b.total - a.total);
-        return rows;
+        return assignRanks(rows);
+    }
+
+    // Sıralama atamayı standart spor mantığıyla yap:
+    //  • Puanı olan satırlar üstte sıralanır, eşitler aynı rank alır (1,2,2,4)
+    //  • Hiç puanı olmayan satırlar listenin sonuna gider, rank verilmez (null)
+    function assignRanks(rows) {
+        const scored   = rows.filter(r => r.r1 != null || r.r2 != null);
+        const unscored = rows.filter(r => r.r1 == null && r.r2 == null);
+        scored.sort((a, b) => b.total - a.total);
+
+        let lastTotal = null;
+        let lastRank  = 0;
+        scored.forEach((row, i) => {
+            if (lastTotal !== null && row.total === lastTotal) {
+                row.rank = lastRank;          // berabere → aynı rank
+            } else {
+                row.rank = i + 1;             // yeni rank = sıra + 1
+                lastRank = row.rank;
+                lastTotal = row.total;
+            }
+        });
+        unscored.forEach(r => { r.rank = null; });
+        return [...scored, ...unscored];
     }
 
     function fmtScore(val, status) {
@@ -305,8 +326,8 @@ export default function ResultsLivePage() {
                     </div>
                 )}
                 {pageRows.map((row, i) => {
-                    const rank  = pageStart + i + 1;
-                    const medal = rank <= 3;
+                    const rank  = row.rank;                  // null = henüz puansız
+                    const medal = rank != null && rank <= 3;
                     const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : 'white';
                     return (
                         <div key={row.a.id} style={{
@@ -323,7 +344,7 @@ export default function ResultsLivePage() {
                                 fontSize: '2rem', fontWeight: 900,
                                 textAlign: 'center', color: rankColor,
                             }}>
-                                {rank}
+                                {rank ?? '—'}
                             </div>
                             <div>
                                 <div style={{ fontSize: '1.3rem', fontWeight: 800 }}>
