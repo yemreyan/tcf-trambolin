@@ -199,14 +199,14 @@ export default function StartListPage() {
         // PDF'de kategori adından yaş grubu etiketlerini temizle
         function cleanCatName(name) {
             return (name || '')
-                .replace(/Minik\s*A\s*/gi, '')
-                .replace(/Minik\s*B\s*/gi, '')
-                .replace(/Küçükler?\s*/gi, '')
-                .replace(/Yıldızlar?\s*/gi, '')
-                .replace(/Gençler?\s*/gi, '')
-                .replace(/Büyükler?\s*/gi, '')
-                .replace(/\(\s*\)/g, '')   // boş parantez kaldır
-                .replace(/\s{2,}/g, ' ')   // çift boşluk temizle
+                .replace(/Minik\s*A\b\s*/gi, '')
+                .replace(/Minik\s*B\b\s*/gi, '')
+                .replace(/Küçük(?:ler?)?\s*/gi, '')
+                .replace(/Yıldız(?:lar?)?\s*/gi, '')
+                .replace(/Genç(?:ler?)?\s*/gi, '')
+                .replace(/Büyük(?:ler?)?\s*/gi, '')
+                .replace(/\(\s*\)/g, '')
+                .replace(/\s{2,}/g, ' ')
                 .trim();
         }
 
