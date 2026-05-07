@@ -632,10 +632,10 @@ export default function CJPPage() {
                     <select
                         value={selectedCatId}
                         onChange={e => setSelectedCatId(e.target.value)}
-                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, fontWeight: 700 }}
+                        style={{ flex: 1, background: '#1e293b', color: 'white', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 10px', borderRadius: 8, fontWeight: 700 }}
                     >
-                        <option value="">Kategori Seçiniz</option>
-                        {catList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        <option value="" style={{ background: '#1e293b', color: 'white' }}>Kategori Seçiniz</option>
+                        {catList.map(c => <option key={c.id} value={c.id} style={{ background: '#1e293b', color: 'white' }}>{c.name}</option>)}
                     </select>
                     <button
                         onClick={() => dsRef.current && loadRoutineData(activeRoutine)}
