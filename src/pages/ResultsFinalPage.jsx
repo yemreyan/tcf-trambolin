@@ -494,7 +494,7 @@ export default function ResultsFinalPage() {
                                                         <div style={{
                                                             fontFamily: "'Space Mono',monospace",
                                                             fontSize: '1.2rem', fontWeight: 700,
-                                                            color: medal || '#38bdf8',
+                                                            color: medalC || '#38bdf8',
                                                         }}>
                                                             {row.total > 0 ? row.total.toFixed(3) : (row.r1 != null || row.r2 != null ? row.total.toFixed(3) : '-')}
                                                         </div>
