@@ -356,7 +356,7 @@ export default function StartListPage() {
   <div class="tcf-badge">TCF</div>
   <div class="header-text">
     <div class="header-title">ÇIKIŞ LİSTESİ</div>
-    <div class="header-sub">Türkiye Cimnastik Federasyonu — Trambolin Yarışma Sistemi</div>
+    <div class="header-sub">Türkiye Cimnastik Federasyonu — Trampolin Yarışma Sistemi</div>
   </div>
   <div class="header-right">${esc(dateStr)}</div>
 </div>
@@ -369,7 +369,7 @@ ${compName ? `<div class="comp-info">
 ${sectionsHTML}
 
 <div class="page-footer">
-  <span>TCF Trambolin Yarışma Yönetim Sistemi</span>
+  <span>TCF Trampolin Yarışma Yönetim Sistemi</span>
   <span>${esc(dateStr)}</span>
 </div>
 
