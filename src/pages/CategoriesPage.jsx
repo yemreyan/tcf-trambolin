@@ -14,9 +14,9 @@ import { Utils } from '../lib/DataService';
 const LABELS = {
     male: 'Erkek', female: 'Kadın', mixed: 'Karma',
     individual: 'Bireysel', sync: 'Senkronize', dmt: 'DMT', tumbling: 'Tumbling',
-    minik_a: 'Minik A (8-9)', minik_b: 'Minik B (10-12)',
-    kucuk: 'Küçükler (13-14)', yildiz: 'Yıldızlar (15-16)',
-    genc: 'Gençler (17-21)', buyuk: 'Büyükler (17+)',
+    minik_a: '8-9 Yaş', minik_b: '10-12 Yaş',
+    kucuk: '13-14 Yaş', yildiz: '15-16 Yaş',
+    genc: '17-21 Yaş', buyuk: '17+ Yaş',
 };
 
 const DEFAULT_FORM = {
@@ -214,12 +214,12 @@ export default function CategoriesPage() {
                                 <div className="form-group">
                                     <label>Yaş Grubu</label>
                                     <select value={form.ageGroup} onChange={e => updateForm('ageGroup', e.target.value)}>
-                                        <option value="minik_a">Minik A (8-9 Yaş)</option>
-                                        <option value="minik_b">Minik B (10-12 Yaş)</option>
-                                        <option value="kucuk">Küçükler (13-14 Yaş)</option>
-                                        <option value="yildiz">Yıldızlar (15-16 Yaş)</option>
-                                        <option value="genc">Gençler (17-21 Yaş)</option>
-                                        <option value="buyuk">Büyükler (17+)</option>
+                                        <option value="minik_a">8-9 Yaş</option>
+                                        <option value="minik_b">10-12 Yaş</option>
+                                        <option value="kucuk">13-14 Yaş</option>
+                                        <option value="yildiz">15-16 Yaş</option>
+                                        <option value="genc">17-21 Yaş</option>
+                                        <option value="buyuk">17+ Yaş</option>
                                     </select>
                                 </div>
                                 <div className="form-group">
