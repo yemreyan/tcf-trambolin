@@ -197,6 +197,26 @@ export default function StartListPage() {
     async function downloadPDF() {
         const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+        // ── Türkçe font yükle ───────────────────────────
+        const toBase64 = buf => {
+            const bytes = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+            return btoa(bin);
+        };
+        let fontLoaded = false;
+        try {
+            const [rResp, bResp] = await Promise.all([
+                fetch('/fonts/Roboto-Regular.ttf'),
+                fetch('/fonts/Roboto-Bold.ttf'),
+            ]);
+            const [rBuf, bBuf] = await Promise.all([rResp.arrayBuffer(), bResp.arrayBuffer()]);
+            // font yükleme — jsPDF global VFS'e kaydedilecek
+            window._pdfFontRegular = toBase64(rBuf);
+            window._pdfFontBold    = toBase64(bBuf);
+            fontLoaded = true;
+        } catch (_) { /* font yoksa helvetica devam eder */ }
+
         // ── Veri hazırlama ──────────────────────────────
         // Tek kategori seçiliyse sadece o; seçili değilse tüm kategoriler
         let sections = []; // [{ catName, athletes }]
@@ -241,6 +261,20 @@ export default function StartListPage() {
 
         // ── PDF oluştur ─────────────────────────────────
         const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        // Türkçe font kaydet
+        const F_REG  = 'Roboto-Regular';
+        const F_BOLD = 'Roboto-Bold';
+        if (fontLoaded) {
+            doc.addFileToVFS('Roboto-Regular.ttf', window._pdfFontRegular);
+            doc.addFont('Roboto-Regular.ttf', F_REG, 'normal');
+            doc.addFileToVFS('Roboto-Bold.ttf', window._pdfFontBold);
+            doc.addFont('Roboto-Bold.ttf', F_BOLD, 'normal');
+        }
+        // Kısaltma: setFont'u sarmala
+        const setNormal = () => doc.setFont(fontLoaded ? F_REG  : 'helvetica', 'normal');
+        const setBold   = () => doc.setFont(fontLoaded ? F_BOLD : 'helvetica', 'bold');
+
         const pageW  = 210;
         const pageH  = 297;
         const mL     = 14;
@@ -256,29 +290,29 @@ export default function StartListPage() {
             doc.rect(0, 0, pageW, 32, 'F');
             doc.setFillColor(56, 189, 248);
             doc.roundedRect(mL, 6, 20, 20, 2, 2, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42);
+            setBold(); doc.setFontSize(11); doc.setTextColor(15, 23, 42);
             doc.text('TCF', mL + 10, 19, { align: 'center' });
             doc.setTextColor(255, 255, 255); doc.setFontSize(15);
-            doc.text('ÇIKIŞ LİSTESİ', mL + 25, 14);
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
-            doc.text('Türkiye Cimnastik Federasyonu — Trambolin Sistemi', mL + 25, 21);
+            doc.text('CIKIS LISTESI', mL + 25, 14);
+            setNormal(); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+            doc.text('Turkiye Cimnastik Federasyonu - Trambolin Sistemi', mL + 25, 21);
             doc.text(dateStr, pageW - mR, 14, { align: 'right' });
         }
 
         function drawContinuationHeader(label) {
             doc.setFillColor(15, 23, 42);
             doc.rect(0, 0, pageW, 10, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
-            doc.text(`${compName ? compName + ' — ' : ''}${label}  (devam)`, mL, 7);
+            setBold(); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+            doc.text(`${compName ? compName + ' - ' : ''}${label}  (devam)`, mL, 7);
         }
 
         function drawTableHeader(y) {
             doc.setFillColor(241, 245, 249);
             doc.rect(mL, y, cW, rowH, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(51, 65, 85);
-            doc.text('NO',     mL + 4,           y + 5.5);
-            doc.text('AD SOYAD', mL + colNo + 4, y + 5.5);
-            doc.text('KULÜP',  mL + colNo + colNm + 4, y + 5.5);
+            setBold(); doc.setFontSize(8.5); doc.setTextColor(51, 65, 85);
+            doc.text('NO',       mL + 4,              y + 5.5);
+            doc.text('AD SOYAD', mL + colNo + 4,      y + 5.5);
+            doc.text('KULUP',    mL + colNo + colNm + 4, y + 5.5);
             return y + rowH;
         }
 
@@ -288,11 +322,21 @@ export default function StartListPage() {
                 doc.setPage(i);
                 doc.setFillColor(241, 245, 249);
                 doc.rect(0, pageH - 12, pageW, 12, 'F');
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
-                doc.text('TCF Trambolin Yarışma Yönetim Sistemi', mL, pageH - 5);
-                doc.text(`Sayfa ${i} / ${n}   —   ${dateStr}`, pageW - mR, pageH - 5, { align: 'right' });
+                setNormal(); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
+                doc.text('TCF Trambolin Yarisma Yonetim Sistemi', mL, pageH - 5);
+                doc.text(`Sayfa ${i} / ${n}   -   ${dateStr}`, pageW - mR, pageH - 5, { align: 'right' });
             }
         }
+
+        // Türkçe karakterleri Roboto ile yaz; Roboto yoksa ASCII'ye çevir
+        const tr = fontLoaded
+            ? (s) => s   // Roboto → doğrudan yaz
+            : (s) => (s || '').replace(/ğ/g,'g').replace(/Ğ/g,'G')
+                           .replace(/ş/g,'s').replace(/Ş/g,'S')
+                           .replace(/ı/g,'i').replace(/İ/g,'I')
+                           .replace(/ö/g,'o').replace(/Ö/g,'O')
+                           .replace(/ü/g,'u').replace(/Ü/g,'U')
+                           .replace(/ç/g,'c').replace(/Ç/g,'C');
 
         // ── İçerik render ───────────────────────────────
         drawFirstHeader();
@@ -300,42 +344,39 @@ export default function StartListPage() {
 
         // Yarışma adı (ilk sayfada)
         if (compName) {
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
-            doc.text(compName, mL, y); y += 8;
+            setBold(); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
+            doc.text(tr(compName), mL, y); y += 8;
         }
         if (!selectedCatId) {
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139);
+            setNormal(); doc.setFontSize(9); doc.setTextColor(100, 116, 139);
             const total = sections.reduce((s, sec) => s + sec.athletes.length, 0);
-            doc.text(`Tüm Kategoriler — ${sections.length} kategori, ${total} sporcu`, mL, y); y += 3;
+            doc.text(tr(`Tum Kategoriler - ${sections.length} kategori, ${total} sporcu`), mL, y); y += 3;
             doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.4);
             doc.line(mL, y, pageW - mR, y); y += 6;
         }
 
         sections.forEach((sec, sIdx) => {
-            // Kategori başlığı için yeterli alan yoksa yeni sayfa
             if (y + 28 > pageH - 18) {
                 doc.addPage();
-                drawContinuationHeader(sec.catName);
+                drawContinuationHeader(tr(sec.catName));
                 y = 16;
             }
 
             // Kategori başlık bandı
             doc.setFillColor(30, 41, 59);
             doc.rect(mL, y, cW, 10, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(56, 189, 248);
-            doc.text(sec.catName.toUpperCase(), mL + 4, y + 7);
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+            setBold(); doc.setFontSize(9.5); doc.setTextColor(56, 189, 248);
+            doc.text(tr(sec.catName.toUpperCase()), mL + 4, y + 7);
+            setNormal(); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
             doc.text(`${sec.athletes.length} sporcu`, pageW - mR, y + 7, { align: 'right' });
-            y += 10 + 2;
+            y += 12;
 
-            // Tablo başlığı
             y = drawTableHeader(y);
 
-            // Satırlar
             sec.athletes.forEach((a, i) => {
                 if (y + rowH > pageH - 18) {
                     doc.addPage();
-                    drawContinuationHeader(sec.catName);
+                    drawContinuationHeader(tr(sec.catName));
                     y = 16;
                     y = drawTableHeader(y);
                 }
@@ -347,19 +388,18 @@ export default function StartListPage() {
                 doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
                 doc.line(mL, y + rowH, mL + cW, y + rowH);
 
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 41, 59);
+                setBold(); doc.setFontSize(9); doc.setTextColor(30, 41, 59);
                 doc.text(String(i + 1), mL + colNo / 2, y + 5.5, { align: 'center' });
 
-                const fullName = `${a.surname ? a.surname.toUpperCase() : ''} ${a.name || ''}`.trim();
+                const fullName = tr(`${a.surname ? a.surname.toUpperCase() : ''} ${a.name || ''}`.trim());
                 doc.text(fullName, mL + colNo + 4, y + 5.5);
 
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(71, 85, 105);
-                doc.text(a.club || '—', mL + colNo + colNm + 4, y + 5.5);
+                setNormal(); doc.setFontSize(8.5); doc.setTextColor(71, 85, 105);
+                doc.text(tr(a.club || '-'), mL + colNo + colNm + 4, y + 5.5);
 
                 y += rowH;
             });
 
-            // Kategoriler arası boşluk
             if (sIdx < sections.length - 1) y += 8;
         });
 
