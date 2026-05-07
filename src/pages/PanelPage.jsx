@@ -91,7 +91,7 @@ export default function PanelPage() {
                 </div>
 
                 {/* Menu Grid */}
-                <div className="menu-grid">
+                <div className="menu-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 24 }}>
                     <MenuCard icon="category" title="Kategoriler" desc="Yaş grupları ve alet tanımları" onClick={() => navigate('/categories')} />
                     <MenuCard icon="person_add" title="Kayıt İşlemleri" desc="Sporcu ekle/düzenle/sil" onClick={() => navigate('/registration')} />
                     <MenuCard icon="format_list_numbered" title="Start Listesi" desc="Çıkış sırasını düzenle" onClick={() => navigate('/start-list')} />
