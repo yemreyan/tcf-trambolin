@@ -17,6 +17,7 @@ import { ref, get, set, update } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
+import { jsPDF } from 'jspdf';
 
 export default function StartListPage() {
     const navigate = useNavigate();
@@ -30,12 +31,17 @@ export default function StartListPage() {
     const [athleteList, setAthleteList] = useState([]);
     const [expandedClubs, setExpandedClubs] = useState(new Set());
     const [saving, setSaving] = useState(false);
+    const [compName, setCompName] = useState('');
 
     useEffect(() => {
         if (!compId) { navigate('/'); return; }
         (async () => {
-            const snap = await get(ref(db, `competitions/${compId}/categories`));
-            setCategories(snap.val() || {});
+            const [catSnap, compSnap] = await Promise.all([
+                get(ref(db, `competitions/${compId}/categories`)),
+                get(ref(db, `competitions/${compId}/name`)),
+            ]);
+            setCategories(catSnap.val() || {});
+            setCompName(compSnap.val() || '');
         })();
     }, [compId]);
 
@@ -188,6 +194,170 @@ export default function StartListPage() {
         }
     }
 
+    function downloadPDF() {
+        if (!selectedCatId || athleteList.length === 0) {
+            toast('Önce kategori seçin ve sporcu listesi yükleyin.', 'warning');
+            return;
+        }
+        const catName = categories[selectedCatId]?.name || selectedCatId;
+        const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = 210;
+        const pageH = 297;
+        const marginL = 14;
+        const marginR = 14;
+        const contentW = pageW - marginL - marginR;
+
+        // ── Header Bar ─────────────────────────────────
+        doc.setFillColor(15, 23, 42);       // #0f172a — lacivert
+        doc.rect(0, 0, pageW, 32, 'F');
+
+        // TCF "logo" kutusu
+        doc.setFillColor(56, 189, 248);     // #38bdf8 — mavi accent
+        doc.roundedRect(marginL, 6, 20, 20, 2, 2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(15, 23, 42);
+        doc.text('TCF', marginL + 10, 19, { align: 'center' });
+
+        // Başlık metni
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(15);
+        doc.text('ÇIKIŞ LİSTESİ', marginL + 25, 14);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);    // #94a3b8
+        doc.text('Türkiye Cimnastik Federasyonu — Trambolin Sistemi', marginL + 25, 21);
+
+        // Tarih (sağ üst)
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(dateStr, pageW - marginR, 14, { align: 'right' });
+
+        // ── Yarışma + Kategori Bilgisi ──────────────────
+        let y = 42;
+        if (compName) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(13);
+            doc.setTextColor(15, 23, 42);
+            doc.text(compName, marginL, y);
+            y += 7;
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(56, 189, 248);
+        doc.text(catName.toUpperCase(), marginL, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Toplam Sporcu: ${athleteList.length}`, pageW - marginR, y, { align: 'right' });
+        y += 4;
+
+        // Ayırıcı çizgi
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.4);
+        doc.line(marginL, y, pageW - marginR, y);
+        y += 6;
+
+        // ── Tablo Başlığı ───────────────────────────────
+        const colNo   = 12;
+        const colName = 85;
+        const colClub = contentW - colNo - colName;
+        const rowH    = 8;
+
+        doc.setFillColor(241, 245, 249);    // #f1f5f9
+        doc.rect(marginL, y, contentW, rowH, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(51, 65, 85);
+        doc.text('NO', marginL + 4, y + 5.5);
+        doc.text('AD SOYAD', marginL + colNo + 4, y + 5.5);
+        doc.text('KULÜP', marginL + colNo + colName + 4, y + 5.5);
+        y += rowH;
+
+        // ── Satırlar ────────────────────────────────────
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+
+        athleteList.forEach((a, i) => {
+            // Yeni sayfa kontrolü
+            if (y + rowH > pageH - 18) {
+                doc.addPage();
+                y = 18;
+                // Yeni sayfada ince header tekrar
+                doc.setFillColor(15, 23, 42);
+                doc.rect(0, 0, pageW, 10, 'F');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8);
+                doc.setTextColor(148, 163, 184);
+                doc.text(`${compName ? compName + ' — ' : ''}${catName}  (devam)`, marginL, 7);
+                y = 16;
+
+                // Tablo başlığı tekrar
+                doc.setFillColor(241, 245, 249);
+                doc.rect(marginL, y, contentW, rowH, 'F');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8.5);
+                doc.setTextColor(51, 65, 85);
+                doc.text('NO', marginL + 4, y + 5.5);
+                doc.text('AD SOYAD', marginL + colNo + 4, y + 5.5);
+                doc.text('KULÜP', marginL + colNo + colName + 4, y + 5.5);
+                y += rowH;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+            }
+
+            // Satır arkaplanı (alternatif)
+            if (i % 2 === 0) {
+                doc.setFillColor(248, 250, 252);
+                doc.rect(marginL, y, contentW, rowH, 'F');
+            }
+
+            // Hücre çizgisi (alt)
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.2);
+            doc.line(marginL, y + rowH, marginL + contentW, y + rowH);
+
+            doc.setTextColor(30, 41, 59);
+
+            // Sıra numarası (ortalı, kalın)
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.text(String(i + 1), marginL + colNo / 2, y + 5.5, { align: 'center' });
+
+            // Ad Soyad
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            const fullName = `${a.surname ? a.surname.toUpperCase() : ''} ${a.name || ''}`.trim();
+            doc.text(fullName, marginL + colNo + 4, y + 5.5);
+
+            // Kulüp
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(71, 85, 105);
+            const clubText = a.club || '—';
+            doc.text(clubText, marginL + colNo + colName + 4, y + 5.5);
+
+            y += rowH;
+        });
+
+        // ── Footer ──────────────────────────────────────
+        doc.setFillColor(241, 245, 249);
+        doc.rect(0, pageH - 12, pageW, 12, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text('TCF Trambolin Yarışma Yönetim Sistemi', marginL, pageH - 5);
+        doc.text(`${dateStr}`, pageW - marginR, pageH - 5, { align: 'right' });
+
+        // ── Kaydet ──────────────────────────────────────
+        const safeComp = (compName || 'yarışma').replace(/[^a-z0-9çşğüöıÇŞĞÜÖİ ]/gi, '');
+        const safeCat  = catName.replace(/[^a-z0-9çşğüöıÇŞĞÜÖİ ]/gi, '');
+        doc.save(`cikis-listesi_${safeComp}_${safeCat}.pdf`);
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <nav className="topnav">
@@ -217,6 +387,14 @@ export default function StartListPage() {
                         </button>
                         <button className="btn btn-primary btn-sm" onClick={saveOrder} disabled={!selectedCatId || saving}>
                             <i className="material-icons-round">save</i> {saving ? 'KAYDEDİLİYOR...' : 'KAYDET'}
+                        </button>
+                        <button
+                            className="btn btn-sm"
+                            onClick={downloadPDF}
+                            disabled={!selectedCatId || athleteList.length === 0}
+                            style={{ background: '#10b981', color: 'white' }}
+                        >
+                            <i className="material-icons-round">picture_as_pdf</i> PDF İndir
                         </button>
                     </div>
 
