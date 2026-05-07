@@ -196,13 +196,27 @@ export default function StartListPage() {
     async function downloadPDF() {
         const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+        // PDF'de kategori adından yaş grubu etiketlerini temizle
+        function cleanCatName(name) {
+            return (name || '')
+                .replace(/Minik\s*A\s*/gi, '')
+                .replace(/Minik\s*B\s*/gi, '')
+                .replace(/Küçükler?\s*/gi, '')
+                .replace(/Yıldızlar?\s*/gi, '')
+                .replace(/Gençler?\s*/gi, '')
+                .replace(/Büyükler?\s*/gi, '')
+                .replace(/\(\s*\)/g, '')   // boş parantez kaldır
+                .replace(/\s{2,}/g, ' ')   // çift boşluk temizle
+                .trim();
+        }
+
         // ── Veri hazırlama ──────────────────────────────
         // Tek kategori seçiliyse sadece o; seçili değilse tüm kategoriler
         let sections = []; // [{ catName, athletes }]
 
         if (selectedCatId) {
             // Mevcut ekrandaki listeyi kullan (zaten yüklü)
-            sections = [{ catName: categories[selectedCatId]?.name || selectedCatId, athletes: athleteList }];
+            sections = [{ catName: cleanCatName(categories[selectedCatId]?.name || selectedCatId), athletes: athleteList }];
         } else {
             // Tüm kategorileri Firebase'den çek
             const catList = Object.values(categories).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
@@ -232,7 +246,7 @@ export default function StartListPage() {
                         return c !== 0 ? c : (a.surname || '').localeCompare(b.surname || '', 'tr');
                     });
                 }
-                sections.push({ catName: cat.name || cat.id, athletes: ordered });
+                sections.push({ catName: cleanCatName(cat.name || cat.id), athletes: ordered });
             });
 
             if (sections.length === 0) { toast('Hiçbir kategoride sporcu bulunamadı.', 'warning'); return; }
