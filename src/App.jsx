@@ -18,6 +18,7 @@ const ResultsFinalPage  = lazy(() => import('./pages/ResultsFinalPage'));
 const CreateFinalsPage  = lazy(() => import('./pages/CreateFinalsPage'));
 const PasswordAdminPage = lazy(() => import('./pages/PasswordAdminPage'));
 const AdminToolsPage    = lazy(() => import('./pages/AdminToolsPage'));
+const JudgeAnalysisPage = lazy(() => import('./pages/JudgeAnalysisPage'));
 
 // ── Yükleme Ekranı ────────────────────────────────────────────────────────
 const PageLoader = () => (
@@ -46,6 +47,7 @@ export default function App() {
                             <Route path="/password-admin"    element={<PasswordAdminPage />} />
                             <Route path="/create-finals"     element={<CreateFinalsPage />} />
                             <Route path="/admin-tools"       element={<AdminToolsPage />} />
+                            <Route path="/judge-analysis"    element={<JudgeAnalysisPage />} />
 
                             {/* Yeni pencerede açılan rotalar */}
                             <Route path="/judge-cockpit"     element={<JudgeCockpitPage />} />

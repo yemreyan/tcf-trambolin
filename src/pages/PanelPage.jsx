@@ -136,6 +136,12 @@ export default function PanelPage() {
                         onClick={() => navigate('/password-admin')}
                         accentColor="#f43f5e"
                     />
+
+                    <MenuCard
+                        icon="analytics" title="Hakem Raporu" desc="Sapma & tutarlılık analizi"
+                        onClick={() => navigate('/judge-analysis')}
+                        accentColor="#8b5cf6"
+                    />
                 </div>
             </div>
 
