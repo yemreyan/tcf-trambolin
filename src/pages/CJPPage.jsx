@@ -26,8 +26,10 @@ import PasswordGate from '../components/PasswordGate';
 // Her element için 6 hakemden en yüksek 2 + en düşük 2 kesilir, kalan toplanır.
 // Landing ayrıca aynı şekilde kesilir.
 // Not: JudgeCockpitPage `deductions` alanı olarak yazar (HTML ile uyumlu).
-function calcEScore(judgesData, elementCount = 10) {
-    const base = elementCount * 2;
+// Bireysel: base = elementCount × 2 (maks 20.0)
+// Senkron:  base = elementCount × 1 (maks 10.0)  ← FIG Senkron kuralı
+function calcEScore(judgesData, elementCount = 10, isSync = false) {
+    const base = isSync ? elementCount : elementCount * 2;
 
     function trimDeductions(arr) {
         if (arr.length >= 6) {
@@ -160,7 +162,11 @@ export default function CJPPage() {
     const [dInput, setDInput] = useState('');
 
     // ── Hesaplanan değerler ───────────────────────────────────────────────
-    const eScore = calcEScore(judgesData, elementCount);
+    // Sync mi? — eScore hesabından ÖNCE belirlenmeli (base değerini etkiler)
+    const isSync = selected?.catType === 'sync';
+
+    // Bireysel: base 20, Senkron: base 10
+    const eScore = calcEScore(judgesData, elementCount, isSync);
 
     // D: önce D hakeminden oku, yoksa manuel girişi kullan
     const dFromJudge = getDScoreFromJudge(judgesData);
@@ -172,9 +178,6 @@ export default function CJPPage() {
     const sVal   = parseFloat(inpS)  || 0;
     const pVal   = parseFloat(inpP)  || 0;
     const dpVal  = parseFloat(inpDp) || 0;
-
-    // Sync mi? Kategoriye göre belirlenir
-    const isSync = selected?.catType === 'sync';
 
     // Hesaplanan ara değerler
     const hEffective = isSync ? (h1Val + h2Val) / 2 : h1Val; // Sync: (H1+H2)/2 | Bireysel: H
@@ -1029,7 +1032,10 @@ export default function CJPPage() {
                         ))}
                     </div>
                     <div style={{ textAlign: 'center', marginTop: 12, fontSize: '0.82rem', color: '#64748b' }}>
-                        E Başlangıç Puanı: <strong style={{ color: '#10b981' }}>{elementCount * 2}</strong>
+                        E Başlangıç Puanı: <strong style={{ color: '#10b981' }}>
+                            {isSync ? elementCount : elementCount * 2}
+                        </strong>
+                        {isSync && <span style={{ marginLeft: 6, color: '#c084fc', fontSize: '0.75rem' }}>(SENKRON — ×1)</span>}
                     </div>
                     <button onClick={() => setShowElementPopup(false)} style={{ ...unlockBtnStyle('#ef4444'), marginTop: 14 }}>Kapat</button>
                 </ModalOverlay>
