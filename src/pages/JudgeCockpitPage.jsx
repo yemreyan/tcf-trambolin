@@ -19,7 +19,7 @@ import { getAthleteName, getAthleteClub } from '../lib/DataService';
 import PasswordGate from '../components/PasswordGate';
 
 const DEDUCT_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5];
-const LANDING_OPTIONS = [0.0, 0.5, 1.0];
+const LANDING_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.5, 1.0];
 const JUMP_COUNT = 10;
 
 export default function JudgeCockpitPage() {
