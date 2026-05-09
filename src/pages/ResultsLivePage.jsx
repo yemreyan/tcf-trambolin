@@ -177,10 +177,11 @@ export default function ResultsLivePage() {
                         || scores[pair.athlete1Id]
                         || scores[pair.athlete2Id]
                         || {};
-                    const r1 = res.r1?.total ?? null;
-                    const r2 = res.r2?.total ?? null;
                     const s1 = res.r1?.status;
                     const s2 = res.r2?.status;
+                    // DNS/DNF → sıralama dışı (null)
+                    const r1 = isDNX(s1) ? null : (res.r1?.total ?? null);
+                    const r2 = isDNX(s2) ? null : (res.r2?.total ?? null);
                     let total = 0;
                     if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
                     else total = (r1 || 0) + (r2 || 0);
@@ -198,10 +199,10 @@ export default function ResultsLivePage() {
                 } else {
                     // Eşleştirilmemiş sporcu — bireysel göster
                     const res = scores[a.uniqueId] || scores[a.id] || {};
-                    const r1 = res.r1?.total ?? null;
-                    const r2 = res.r2?.total ?? null;
                     const s1 = res.r1?.status;
                     const s2 = res.r2?.status;
+                    const r1 = isDNX(s1) ? null : (res.r1?.total ?? null);
+                    const r2 = isDNX(s2) ? null : (res.r2?.total ?? null);
                     let total = 0;
                     if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
                     else total = (r1 || 0) + (r2 || 0);
@@ -214,10 +215,11 @@ export default function ResultsLivePage() {
         // Bireysel kategori
         const rows = catAthletes.map(a => {
             const res = scores[a.uniqueId] || scores[a.id] || {};
-            const r1  = res.r1?.total ?? null;
-            const r2  = res.r2?.total ?? null;
             const s1  = res.r1?.status;
             const s2  = res.r2?.status;
+            // DNS/DNF → sıralama dışı (null)
+            const r1  = isDNX(s1) ? null : (res.r1?.total ?? null);
+            const r2  = isDNX(s2) ? null : (res.r2?.total ?? null);
             let total = 0;
             if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
             else total = (r1 || 0) + (r2 || 0);
@@ -249,10 +251,16 @@ export default function ResultsLivePage() {
         return [...scored, ...unscored];
     }
 
+    function isDNX(status) {
+        const s = (status || '').toUpperCase();
+        return s === 'DNS' || s === 'DNF';
+    }
+
     function fmtScore(val, status) {
-        if (status === 'dns') return 'DNS';
-        if (status === 'dnf') return 'DNF';
-        if (val == null) return '-';
+        const s = (status || '').toUpperCase();
+        if (s === 'DNS') return 'DNS';
+        if (s === 'DNF') return 'DNF';
+        if (val == null) return '—';
         return Number(val).toFixed(3);
     }
 
@@ -371,7 +379,13 @@ export default function ResultsLivePage() {
                                 textAlign: 'right',
                                 color: medal ? rankColor : '#38bdf8',
                             }}>
-                                {row.total > 0 ? row.total.toFixed(3) : (row.r1 != null || row.r2 != null ? row.total.toFixed(3) : '—')}
+                                {(() => {
+                                    // Her iki seri de DNS/DNF ise toplam gösterme
+                                    const allDNX = isDNX(row.s1) && isDNX(row.s2);
+                                    if (allDNX) return <span style={{ fontSize: '1.1rem', color: '#94a3b8' }}>DNS/DNF</span>;
+                                    if (row.r1 == null && row.r2 == null) return '—';
+                                    return row.total.toFixed(3);
+                                })()}
                             </div>
                         </div>
                     );
