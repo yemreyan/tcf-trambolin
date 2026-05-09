@@ -309,7 +309,189 @@ export default function ResultsFinalPage() {
         XLSX.writeFile(wb, `${comp?.name || 'Yarisma'}_Tum_Sonuclar.xlsx`);
     }
 
-    function printAll() { window.print(); }
+    function printAll() {
+        const cats = Object.values(categories);
+        if (cats.length === 0) return;
+
+        // ── Her kategori için sıralama oluştur ───────────────────────────
+        function buildRows(cat) {
+            const r       = getScoringRule(cat);
+            const catSync = cat.type === 'sync';
+            const rows    = [];
+            const pById   = {};
+            Object.values(pairs).forEach(p => { if (p?.id) pById[p.id] = p; });
+
+            const catAths = athletes.filter(a => athleteInCategory(a, cat));
+
+            if (catSync) {
+                const seen = new Set();
+                catAths.forEach(a => {
+                    if (a.pairId && pById[a.pairId]) {
+                        if (seen.has(a.pairId)) return;
+                        seen.add(a.pairId);
+                        const pair = pById[a.pairId];
+                        const res  = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
+                        const r1d  = res.r1 || null;
+                        const r2d  = res.r2 || null;
+                        const v1   = r1d?.total ?? null;
+                        const v2   = r2d?.total ?? null;
+                        const tot  = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                        rows.push({ name: pair.displayName || '—', club: pair.club || a.club || '', v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                    } else {
+                        const res = scores[a.uniqueId] || scores[a.id] || {};
+                        const r1d = res.r1 || null; const r2d = res.r2 || null;
+                        const v1  = r1d?.total ?? null; const v2 = r2d?.total ?? null;
+                        const tot = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                        rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                    }
+                });
+            } else {
+                catAths.forEach(a => {
+                    const res = scores[a.uniqueId] || scores[a.id] || {};
+                    const r1d = res.r1 || null; const r2d = res.r2 || null;
+                    const v1  = r1d?.total ?? null; const v2 = r2d?.total ?? null;
+                    const tot = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                    rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                });
+            }
+
+            const scored   = rows.filter(x => x.v1 != null || x.v2 != null).sort((a, b) => b.tot - a.tot);
+            const unscored = rows.filter(x => x.v1 == null && x.v2 == null);
+            let lv = null, lr = 0;
+            scored.forEach((x, i) => {
+                if (lv !== null && x.tot === lv) x.rank = lr;
+                else { x.rank = i + 1; lr = x.rank; lv = x.tot; }
+            });
+            unscored.forEach(x => { x.rank = null; });
+            return [...scored, ...unscored];
+        }
+
+        function fmtP(val, status) {
+            const s = (status || '').toUpperCase();
+            if (s === 'DNS') return 'DNS';
+            if (s === 'DNF') return 'DNF';
+            if (val == null) return '-';
+            return Number(val).toFixed(3);
+        }
+
+        function medalEmoji(rank) {
+            if (rank === 1) return '🥇';
+            if (rank === 2) return '🥈';
+            if (rank === 3) return '🥉';
+            return rank ?? '—';
+        }
+
+        // ── HTML blokları ─────────────────────────────────────────────────
+        const catBlocks = cats.map(cat => {
+            const rows = buildRows(cat);
+            if (rows.length === 0) return '';
+            const ruleLabel = getScoringRule(cat) === 'max' ? 'GEÇERLİ = MAX(R1,R2)' : 'TOPLAM = R1 + R2';
+            const syncLabel = cat.type === 'sync' ? ' <span class="badge-sync">SENKRONİZE</span>' : '';
+
+            const trs = rows.map(x => `
+                <tr class="${x.rank === 1 ? 'gold' : x.rank === 2 ? 'silver' : x.rank === 3 ? 'bronze' : ''}">
+                    <td class="rank">${medalEmoji(x.rank)}</td>
+                    <td>
+                        <div class="name">${x.name}</div>
+                        <div class="club">${x.club || '—'}</div>
+                    </td>
+                    <td class="score">${fmtP(x.v1, x.s1)}</td>
+                    <td class="score">${fmtP(x.v2, x.s2)}</td>
+                    <td class="total">${x.rank != null ? Number(x.tot).toFixed(3) : '—'}</td>
+                </tr>`).join('');
+
+            return `
+                <div class="cat-section">
+                    <div class="cat-header">
+                        <span class="cat-name">${cat.name}${syncLabel}</span>
+                        <span class="rule-badge">${ruleLabel}</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:56px">Sıra</th>
+                                <th>Ad Soyad / Kulüp</th>
+                                <th style="width:100px;text-align:right">R1</th>
+                                <th style="width:100px;text-align:right">R2</th>
+                                <th style="width:120px;text-align:right">Toplam</th>
+                            </tr>
+                        </thead>
+                        <tbody>${trs}</tbody>
+                    </table>
+                </div>`;
+        }).join('');
+
+        const now = new Date().toLocaleString('tr-TR');
+        const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>${comp?.name || 'Sonuçlar'} — Final Raporu</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; background: white; }
+
+  /* Başlık */
+  .page-header { text-align: center; padding: 18px 0 12px; border-bottom: 3px solid #1e293b; margin-bottom: 20px; }
+  .badge { display: inline-block; background: #1e293b; color: white; font-size: 9pt; font-weight: 700; padding: 2px 10px; border-radius: 4px; letter-spacing: 2px; margin-bottom: 6px; }
+  .comp-name { font-size: 18pt; font-weight: 900; letter-spacing: 1px; }
+  .report-meta { font-size: 9pt; color: #555; margin-top: 4px; }
+
+  /* Kategori bloku */
+  .cat-section { margin-bottom: 24px; page-break-inside: avoid; }
+  .cat-header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: white; padding: 7px 14px; border-radius: 4px 4px 0 0; }
+  .cat-name { font-size: 12pt; font-weight: 700; }
+  .rule-badge { font-size: 8pt; background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 3px; }
+  .badge-sync { font-size: 8pt; background: #7c3aed; color: white; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+
+  /* Tablo */
+  table { width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; }
+  thead th { background: #f1f5f9; font-size: 9pt; font-weight: 700; padding: 6px 10px; border: 1px solid #d1d5db; text-align: left; color: #374151; letter-spacing: 0.5px; text-transform: uppercase; }
+  tbody td { padding: 7px 10px; border: 1px solid #e5e7eb; vertical-align: middle; }
+  tbody tr:nth-child(even) { background: #f9fafb; }
+  .rank { font-size: 14pt; font-weight: 900; text-align: center; width: 56px; }
+  .name { font-weight: 700; font-size: 10.5pt; }
+  .club { font-size: 8.5pt; color: #6b7280; margin-top: 1px; }
+  .score { font-family: monospace; font-size: 10pt; text-align: right; color: #374151; }
+  .total { font-family: monospace; font-size: 12pt; font-weight: 900; text-align: right; }
+
+  /* Madalya satırları */
+  tr.gold   { background: #fffbeb !important; }
+  tr.silver { background: #f8fafc !important; }
+  tr.bronze { background: #fff7ed !important; }
+  tr.gold   .total { color: #b45309; }
+  tr.silver .total { color: #475569; }
+  tr.bronze .total { color: #92400e; }
+
+  /* Alt bilgi */
+  .page-footer { text-align: center; font-size: 8pt; color: #9ca3af; margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+
+  @media print {
+    body { font-size: 10pt; }
+    .cat-section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <div class="page-header">
+    <div class="badge">TCF — TÜRKİYE CİMNASTİK FEDERASYONU</div>
+    <div class="comp-name">${comp?.name || 'Yarışma Sonuçları'}</div>
+    <div class="report-meta">FİNAL SONUÇ RAPORU &nbsp;·&nbsp; ${now}</div>
+  </div>
+
+  ${catBlocks}
+
+  <div class="page-footer">
+    TCF Trampolin Puanlama Sistemi &nbsp;·&nbsp; ${now}
+  </div>
+<script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+        const w = window.open('', '_blank');
+        w.document.write(html);
+        w.document.close();
+    }
 
     if (!compId) return null;
 
