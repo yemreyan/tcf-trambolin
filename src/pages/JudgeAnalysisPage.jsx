@@ -59,10 +59,53 @@ export default function JudgeAnalysisPage() {
             setCategories(cats);
             setCompName(nameSnap.val() || '');
 
-            // Düzleştir: her (athId, seri) → tek satır
+            // ── athId → catId haritası ───────────────────────────────────────
+            // Sadece ath.category alanına güvenmek yetmez — kayıt sırasında
+            // kategori zorunlu değil. Kategorilerin startList ve athlete listelerinden
+            // de eşleme yapıyoruz (CJP ile aynı mantık).
+            const athToCat = {};
+
+            Object.values(cats).forEach(cat => {
+                // 1) Kategori startList'inden
+                if (cat.startList) {
+                    const sl = Array.isArray(cat.startList)
+                        ? cat.startList
+                        : Object.values(cat.startList);
+                    sl.forEach(a => { if (a?.id) athToCat[a.id] = cat.id; });
+                }
+                // 2) Kategori içi athlete listesinden (legacy)
+                if (cat.athletes) {
+                    const ca = Array.isArray(cat.athletes)
+                        ? cat.athletes
+                        : Object.values(cat.athletes);
+                    ca.forEach(a => { if (a?.id) athToCat[a.id] = cat.id; });
+                }
+                // 3) Global athletes → category/categoryId/catId alanı eşleşmesi
+                Object.values(athletes).forEach(ath => {
+                    if (
+                        ath.id &&
+                        (ath.category === cat.id ||
+                         ath.categoryId === cat.id ||
+                         ath.catId === cat.id)
+                    ) {
+                        athToCat[ath.id] = cat.id;
+                    }
+                });
+            });
+
+            // 4) Pair → kategori (pairId de eşle)
+            Object.values(pairs).forEach(pair => {
+                if (pair.categoryId) {
+                    if (pair.id)          athToCat[pair.id]          = pair.categoryId;
+                    if (pair.athlete1Id)  athToCat[pair.athlete1Id]  = pair.categoryId;
+                    if (pair.athlete2Id)  athToCat[pair.athlete2Id]  = pair.categoryId;
+                }
+            });
+
+            // ── Düzleştir: her (athId, seri) → tek satır ───────────────────
             const flat = [];
             Object.entries(raw).forEach(([athId, routines]) => {
-                // Önce athlete'de ara, sonra pair'de (sync çiftler pairId ile saklanır)
+                // Sporcu veya çift araması
                 const ath  = athletes[athId] || null;
                 const pair = pairs[athId]    || null;
 
@@ -75,14 +118,15 @@ export default function JudgeAnalysisPage() {
                     const name    = ath.name    || ath.ad    || ath.firstName || '';
                     athleteName = `${surname} ${name}`.trim() || ath.displayName || athId;
                 } else {
-                    athleteName = athId; // en azından ID göster
+                    athleteName = athId;
                 }
 
                 // Kulüp
                 const club = ath?.club || ath?.kulup || pair?.club || '';
 
-                // Kategori ID — athlete, pair veya sonucun içinden bul
+                // Kategori: haritadan al, yoksa athlete alanlarına düş
                 const catId =
+                    athToCat[athId] ||
                     ath?.category || ath?.categoryId || ath?.catId ||
                     pair?.categoryId ||
                     '';
@@ -90,7 +134,6 @@ export default function JudgeAnalysisPage() {
                 ['r1', 'r2'].forEach((rKey, ri) => {
                     const r = routines?.[rKey];
                     if (!r) return;
-                    // Hakem verisi yoksa (DNS/DNF gibi) veya hiç e hakemi yoksa atla
                     if (!r.judges || typeof r.judges !== 'object') return;
                     const hasEJudge = Object.keys(r.judges).some(k => k.startsWith('e'));
                     if (!hasEJudge) return;
@@ -114,18 +157,12 @@ export default function JudgeAnalysisPage() {
 
     // ── Filtrelenmiş veri ────────────────────────────────────────────────────
     const filtered = useMemo(() => {
-        const selectedCat = catFilter ? categories[catFilter] : null;
         return allResults.filter(r => {
-            if (catFilter) {
-                // ID eşleşmesi — veya kategori adı eşleşmesi (eski veri uyumluluğu)
-                const matchId   = r.category === catFilter;
-                const matchName = selectedCat && r.category === selectedCat.name;
-                if (!matchId && !matchName) return false;
-            }
+            if (catFilter && r.category !== catFilter) return false;
             if (routineFilter && r.routine !== parseInt(routineFilter)) return false;
             return true;
         });
-    }, [allResults, catFilter, routineFilter, categories]);
+    }, [allResults, catFilter, routineFilter]);
 
     // ── Excel export ─────────────────────────────────────────────────────────
     function exportExcel() {
