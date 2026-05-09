@@ -310,7 +310,10 @@ export default function ResultsFinalPage() {
     }
 
     function printAll() {
-        const cats = Object.values(categories);
+        // Kategori seçiliyse sadece o, seçilmemişse tümü
+        const cats = selectedCatId && categories[selectedCatId]
+            ? [categories[selectedCatId]]
+            : Object.values(categories);
         if (cats.length === 0) return;
 
         // ── Her kategori için sıralama oluştur ───────────────────────────
