@@ -107,7 +107,7 @@ export default function JudgeCockpitPage() {
     const writePath = `live/${compId}/panels/${panel}/scores/judges/${judgeKey}`;
 
     async function syncLive(payload, isSubmit = false) {
-        if (!compId || !athlete) return;
+        if (!compId) return;
         try {
             await set(ref(db, writePath), {
                 judgeId:    judgeKey,
@@ -123,16 +123,15 @@ export default function JudgeCockpitPage() {
 
     // ── E Hakem: Tap sıçrama ──────────────────────────────────────────────
     const tap = useCallback((index, val) => {
-        setDeductions(prev => {
-            const next = [...prev];
-            next[index] = val;
-            syncLive({ deductions: next, landing }, false);
-            return next;
-        });
+        // Yeni kesinti dizisini burada hesapla (state updater dışında)
+        // böylece syncLive her zaman güncel değeri Firebase'e yazar.
+        const next = deductions.map((d, i) => i === index ? val : d);
+        setDeductions(next);
+        syncLive({ deductions: next, landing }, false);
         setSubmitted(false);
         if (index < JUMP_COUNT - 1) setFocused(index + 1);
         else setFocused(JUMP_COUNT);
-    }, [landing, athlete]);
+    }, [deductions, landing, athlete]);
 
     const tapLanding = useCallback((val) => {
         setLanding(val);
