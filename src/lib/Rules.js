@@ -63,6 +63,9 @@ export const DEFAULT_RULES = {
         inactivityMinutes: 10,
         liveCycleSeconds: 8,            // canlı sonuç ekranı sayfa döngüsü
         athletesPerPage: 10,            // canlı sonuçta sayfa başına satır
+        // Takım kartları bireysel satırlardan yüksek; TV'de kaydırma olmaması
+        // için sayfa başına daha az gösterilir.
+        teamsPerPage: 3,
     },
 };
 

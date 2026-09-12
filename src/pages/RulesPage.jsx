@@ -283,6 +283,8 @@ export default function RulesPage() {
                         hint="TV ekranında kategori/sayfa değişim aralığı" min={2} max={120} step={1} draft={draft} set={set} />
                     <NumField g="session" k="athletesPerPage" label="Canlı sonuçta sayfa başına satır"
                         hint="TV ekranında bir sayfada gösterilen sporcu sayısı" min={3} max={30} step={1} draft={draft} set={set} />
+                    <NumField g="session" k="teamsPerPage" label="Canlı sonuçta sayfa başına takım"
+                        hint="Takım kartları daha yüksektir; ekrana sığacak sayıyı seçin" min={1} max={8} step={1} draft={draft} set={set} />
                 </Section>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '24px 0 40px', gap: 12, flexWrap: 'wrap' }}>

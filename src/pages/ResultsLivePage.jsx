@@ -34,6 +34,7 @@ export default function ResultsLivePage() {
     const [params] = useSearchParams();
     const compId = params.get('comp') || params.get('id') || localStorage.getItem('tra_active_comp');
     const rules = useRules(compId);
+    const TEAMS_PER_PAGE = rules.session.teamsPerPage;
     const ATHLETES_PER_PAGE = rules.session.athletesPerPage;
     const CYCLE_MS = rules.session.liveCycleSeconds * 1000;
 
@@ -159,11 +160,18 @@ export default function ResultsLivePage() {
                     routineCount: cr.routineCount,
                     scoringRule: cr.scoringRule,
                 });
-                if (teams.length > 0) out.push({ cat, page: 0, totalPages: 1, kind: 'team' });
+                // Takım kartları bireysel satırlardan yüksek; TV'de taşmasın
+                // diye sayfalanır.
+                if (teams.length > 0) {
+                    const tp = Math.max(1, Math.ceil(teams.length / TEAMS_PER_PAGE));
+                    for (let p = 0; p < tp; p++) {
+                        out.push({ cat, page: p, totalPages: tp, kind: 'team' });
+                    }
+                }
             }
         });
         return out;
-    }, [categories, athletes, pairs, excluded, ATHLETES_PER_PAGE, scores, rules]);
+    }, [categories, athletes, pairs, excluded, ATHLETES_PER_PAGE, TEAMS_PER_PAGE, scores, rules]);
 
     // Otomatik döngü
     useEffect(() => {
@@ -287,7 +295,7 @@ export default function ResultsLivePage() {
     const teamRows = (() => {
         if (!isTeamView) return [];
         const cr = resolveCategoryRules(rules, currentView.cat);
-        return computeTeamRanking(ranking, {
+        const all = computeTeamRanking(ranking, {
             topN: rules.flow.teamTopN,
             minAthletes: cr.teamMinAthletes,
             mode: cr.teamMode,
@@ -295,6 +303,8 @@ export default function ResultsLivePage() {
             routineCount: cr.routineCount,
             scoringRule: cr.scoringRule,
         });
+        const st = currentView.page * TEAMS_PER_PAGE;
+        return all.slice(st, st + TEAMS_PER_PAGE);
     })();
     const pageStart = currentView ? currentView.page * ATHLETES_PER_PAGE : 0;
     const pageRows  = ranking.slice(pageStart, pageStart + ATHLETES_PER_PAGE);
@@ -328,7 +338,7 @@ export default function ResultsLivePage() {
                             )}
                             {currentView.cat.name}
                             {isTeamView && ' — TAKIM'}
-                            {!isTeamView && currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
+                            {currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
                         </div>
                     )}
                     <button onClick={() => setShowSettings(s => !s)} className="btn btn-sm btn-outline">
@@ -349,43 +359,107 @@ export default function ResultsLivePage() {
                 )}
                 {/* ── Takım sıralaması ─────────────────────────────── */}
                 {isTeamView && teamRows.map((t, i) => {
-                    const rank = i + 1;
+                    const rank = currentView.page * TEAMS_PER_PAGE + i + 1;
                     const medal = rank <= 3;
-                    const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : 'white';
+                    const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#7C87D8';
                     return (
                         <div key={t.club} style={{
-                            display: 'grid', gridTemplateColumns: '60px 1fr 170px',
-                            alignItems: 'center', gap: 16,
-                            padding: '16px 20px', marginBottom: 10,
-                            background: medal ? `${rankColor}12` : 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${medal ? `${rankColor}55` : 'rgba(255,255,255,0.06)'}`,
-                            borderRadius: 12,
+                            marginBottom: 10, borderRadius: 14, overflow: 'hidden',
+                            background: medal ? `${rankColor}0D` : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${medal ? `${rankColor}44` : 'rgba(255,255,255,0.07)'}`,
                         }}>
+                            {/* Üst şerit — sıra, kulüp, takım toplamı */}
                             <div style={{
-                                fontFamily: "'Space Mono', monospace", fontSize: '1.6rem',
-                                fontWeight: 700, color: rankColor, textAlign: 'center',
+                                display: 'flex', alignItems: 'center', gap: 16,
+                                padding: '9px 20px',
+                                background: medal ? `${rankColor}14` : 'rgba(255,255,255,0.02)',
+                                borderBottom: '1px solid rgba(255,255,255,0.07)',
                             }}>
-                                {rank}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
                                 <div style={{
-                                    fontSize: '1.5rem', fontWeight: 700, color: 'white',
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: medal ? rankColor : 'rgba(255,255,255,0.08)',
+                                    color: medal ? '#0A0E20' : '#A3ACD0',
+                                    fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: '1.3rem',
                                 }}>
-                                    {t.club}
+                                    {rank}
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 2 }}>
-                                    {t.members.length} sporcu
-                                    {t.perRoutine && t.routineBreakdown
-                                        ? ` · seri bazlı (R1 ${t.routineBreakdown.r1.toFixed(3)} + R2 ${t.routineBreakdown.r2.toFixed(3)})`
-                                        : ` · en iyi ${t.top3.length} sporcu`}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{
+                                        fontSize: '1.4rem', fontWeight: 800, color: 'white', lineHeight: 1.15,
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    }}>
+                                        {t.club}
+                                    </div>
+                                    <div style={{ fontSize: '0.9rem', color: '#A3ACD0', marginTop: 2 }}>
+                                        {t.members.length} sporcu
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ fontSize: '0.72rem', color: '#A3ACD0', letterSpacing: 1.5, fontWeight: 700 }}>
+                                        TAKIM TOPLAMI
+                                    </div>
+                                    <div style={{
+                                        fontFamily: "'Space Mono', monospace", fontSize: '1.85rem',
+                                        fontWeight: 700, color: medal ? rankColor : 'white', lineHeight: 1.05,
+                                    }}>
+                                        {t.teamTotal.toFixed(3)}
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* Seri blokları — hangi sporcunun puanı hangi seriden */}
                             <div style={{
-                                fontFamily: "'Space Mono', monospace", fontSize: '1.9rem',
-                                fontWeight: 700, color: medal ? rankColor : 'white', textAlign: 'right',
+                                display: 'grid',
+                                gridTemplateColumns: `repeat(${t.routines.length}, 1fr)`,
+                                gap: 1, background: 'rgba(255,255,255,0.06)',
                             }}>
-                                {t.teamTotal.toFixed(3)}
+                                {t.routines.map(rt => (
+                                    <div key={rt.key} style={{ background: 'rgba(10,14,32,0.55)', padding: '8px 20px' }}>
+                                        <div style={{
+                                            display: 'flex', justifyContent: 'space-between',
+                                            alignItems: 'baseline', marginBottom: 5,
+                                        }}>
+                                            <span style={{
+                                                fontSize: '0.8rem', fontWeight: 800, letterSpacing: 1.5,
+                                                color: rt.key === 'r1' ? 'var(--accent-primary)' : 'var(--accent-secondary)',
+                                            }}>
+                                                {rt.label.toUpperCase()}
+                                            </span>
+                                            <span style={{
+                                                fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                                                fontSize: '1.1rem', color: '#e2e8f0',
+                                            }}>
+                                                {rt.subtotal.toFixed(3)}
+                                            </span>
+                                        </div>
+                                        {rt.picks.length === 0 ? (
+                                            <div style={{ color: '#475569', fontSize: '0.95rem' }}>
+                                                Bu seriden puan sayılmadı
+                                            </div>
+                                        ) : rt.picks.map((pk, idx) => (
+                                            <div key={idx} style={{
+                                                display: 'flex', justifyContent: 'space-between',
+                                                alignItems: 'center', gap: 12, padding: '2px 0',
+                                                fontSize: '0.95rem',
+                                                borderBottom: idx < rt.picks.length - 1 ? '1px dashed rgba(255,255,255,0.07)' : 'none',
+                                            }}>
+                                                <span style={{
+                                                    color: '#cbd5e1', overflow: 'hidden',
+                                                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                }}>
+                                                    {pk.name}
+                                                </span>
+                                                <span style={{
+                                                    fontFamily: "'Space Mono', monospace",
+                                                    color: '#A3ACD0', flexShrink: 0,
+                                                }}>
+                                                    {pk.score.toFixed(3)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     );
