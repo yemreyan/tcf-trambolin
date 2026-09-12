@@ -22,6 +22,9 @@ export default function PanelPage() {
     const [judgeModal, setJudgeModal] = useState(false);
     const [selectedPanelId, setSelectedPanelId] = useState(null);
     const [step, setStep] = useState('groups'); // 'groups' | 'roles'
+    // Modal hangi ekran için açıldı: null → rol listesi, 'superior' → Üst Jüri.
+    // Üst Jüri rol listesinde yer almadığı için, panel seçilince doğrudan açılır.
+    const [intent, setIntent] = useState(null);
 
     const compId = getActiveCompId();
 
@@ -54,8 +57,21 @@ export default function PanelPage() {
         window.open(`/cjp?panel=${selectedPanelId}&comp=${compId}`, '_blank');
     }
 
+    function openSuperiorJury(panelId) {
+        const id = panelId || selectedPanelId;
+        if (!id) { toast('Lütfen önce jüri grubu seçin.', 'warning'); return; }
+        window.open(`/superior-jury?panel=${id}&comp=${compId}`, '_blank');
+    }
+
     function selectJuryGroup(id) {
         setSelectedPanelId(id);
+        // Üst Jüri için panel seçimi tek adımdır; rol listesine gerek yok.
+        if (intent === 'superior') {
+            openSuperiorJury(id);
+            setJudgeModal(false);
+            setIntent(null);
+            return;
+        }
         setStep('roles');
     }
 
@@ -95,7 +111,7 @@ export default function PanelPage() {
                     <MenuCard icon="category" title="Kategoriler" desc="Yaş grupları ve alet tanımları" onClick={() => navigate('/categories')} />
                     <MenuCard icon="person_add" title="Kayıt İşlemleri" desc="Sporcu ekle/düzenle/sil" onClick={() => navigate('/registration')} />
                     <MenuCard icon="format_list_numbered" title="Start Listesi" desc="Çıkış sırasını düzenle" onClick={() => navigate('/start-list')} />
-                    <MenuCard icon="gavel" title="Hakem Paneli" desc="E/D Hakem Ekranlarını Aç" onClick={() => { setStep('groups'); setSelectedPanelId(null); setJudgeModal(true); }} />
+                    <MenuCard icon="gavel" title="Hakem Paneli" desc="E/D Hakem Ekranlarını Aç" onClick={() => { setIntent(null); setStep('groups'); setSelectedPanelId(null); setJudgeModal(true); }} />
 
                     <MenuCard
                         icon="stars" title="Başhakem (CJP)" desc="Sporcu Çağır / T-H-S Girişi"
@@ -106,6 +122,7 @@ export default function PanelPage() {
                                 window.open(`/cjp?panel=${panelIds[0]}&comp=${compId}`, '_blank');
                             } else {
                                 // Çoklu / sıfır panel → modal ile seç
+                                setIntent(null);
                                 setStep('groups');
                                 setSelectedPanelId(null);
                                 setJudgeModal(true);
@@ -117,10 +134,13 @@ export default function PanelPage() {
                     <MenuCard
                         icon="verified_user" title="Üst Jüri" desc="Sahadaki sporcunun tüm ayrıntısı"
                         onClick={() => {
-                            // CJP ile aynı mantık: panel seçilmeden açılmaz
+                            // CJP ile aynı mantık: panel seçilmeden açılmaz.
+                            // Birden fazla panel varsa panel seçimi istenir ve
+                            // seçim yapılınca ekran doğrudan açılır.
                             if (panelIds.length === 1) {
-                                window.open(`/superior-jury?panel=${panelIds[0]}&comp=${compId}`, '_blank');
+                                openSuperiorJury(panelIds[0]);
                             } else {
+                                setIntent('superior');
                                 setStep('groups');
                                 setSelectedPanelId(null);
                                 setJudgeModal(true);
@@ -259,6 +279,15 @@ export default function PanelPage() {
                                         <i className="material-icons-round">stars</i> BAŞHAKEM PANELİ
                                     </button>
 
+                                    <h5 style={{ color: '#94a3b8', marginBottom: 10, fontSize: '0.8rem', letterSpacing: 1 }}>ÜST JÜRİ</h5>
+                                    <button
+                                        className="btn w-100"
+                                        style={{ background: 'linear-gradient(135deg, #0ea5e9, #0369a1)', color: 'white', marginBottom: 20 }}
+                                        onClick={() => openSuperiorJury()}
+                                    >
+                                        <i className="material-icons-round">verified_user</i> ÜST JÜRİ EKRANI
+                                    </button>
+
                                     <h5 style={{ color: '#94a3b8', marginBottom: 10, fontSize: '0.8rem', letterSpacing: 1 }}>SKORBOARD</h5>
                                     <button
                                         className="btn btn-outline w-100"
@@ -270,7 +299,7 @@ export default function PanelPage() {
                                 </div>
                             )}
 
-                            <button className="btn btn-warning w-100" onClick={() => setJudgeModal(false)}>KAPAT</button>
+                            <button className="btn btn-warning w-100" onClick={() => { setJudgeModal(false); setIntent(null); }}>KAPAT</button>
                         </div>
                     </div>
                 </div>
