@@ -263,13 +263,17 @@ export default function CJPPage() {
                     const mergedClub    = (ath.club    || '').trim() || (fresh.club    || fresh.kulup   || '');
                     // pairId: startList snapshot'tan gelmeyebilir — fresh (globalAthletes) verisi öncelikli
                     const mergedPairId  = fresh.pairId ?? ath.pairId ?? null;
+                    // uniqueId sonucun yazılacağı anahtardır (results/{uniqueId}/r{n}).
+                    // Finalist kayıtlarında bu `{origId}_final`'dir; ath.id'ye sabitlenirse
+                    // finalde yayınlanan puan eleme sonucunun üzerine yazılır.
+                    const mergedUniqueId = ath.uniqueId || fresh.uniqueId || ath.id;
                     list.push({
                         ...ath,
                         name: mergedName,
                         surname: mergedSurname,
                         club: mergedClub,
                         pairId: mergedPairId,
-                        catId: cat.id, catName: cat.name, catType: cat.type ?? null, uniqueId: ath.id,
+                        catId: cat.id, catName: cat.name, catType: cat.type ?? null, uniqueId: mergedUniqueId,
                     });
                 });
             });

@@ -7,12 +7,17 @@
  *   - İlk 8 finalist, 9-10 yedek seçilir.
  *   - Finalistler A grubu (1-4) ve B grubu (5-8) olarak ikiye bölünür, her grup shuffle edilir.
  *   - Yeni kategori {catId}_final olarak oluşturulur, finalist sporcular
- *     aynı sporcu id'leri ile ama yeni uniqueId ile eklenir (isReserve=true ise yedek).
+ *     YENİ bir id ({origId}_final) ile eklenir (isReserve=true ise yedek).
+ *     Orijinal id `originalId` alanında saklanır.
+ *
+ * ÖNEMLİ: Finalist kaydının `id` alanı Firebase anahtarıyla aynı olmalıdır.
+ * Aksi halde CJP finalde yayınlanan puanı eleme sonucunun üzerine yazar.
  *
  * Firebase yolları aynen korundu:
  *   competitions/{compId}/categories/{catId}_final
  *   competitions/{compId}/athletes/{uniqueId}
  *   competitions/{compId}/startOrder/{catId}_final
+ *   competitions/{compId}/categories/{catId}_final/startList
  */
 
 import { useState, useEffect } from 'react';
@@ -21,7 +26,7 @@ import { ref, get, set, update, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { getScoringRule } from '../lib/DataService';
+import { getScoringRule, computeRoutineTotals } from '../lib/DataService';
 
 export default function CreateFinalsPage() {
     const navigate = useNavigate();
@@ -76,11 +81,11 @@ export default function CreateFinalsPage() {
             const rule = getScoringRule(cat);
             const ranked = filtered.map(a => {
                 const res = scores[a.uniqueId] || scores[a.id] || {};
-                const r1 = res.r1?.total ?? 0;
-                const r2 = res.r2?.total ?? 0;
-                const total = rule === 'max' ? Math.max(r1, r2) : (r1 + r2);
-                return { a, total };
-            });
+                // DNS/DNF → sıralama dışı; her iki serisi de geçersizse sporcu
+                // hiç yarışmamış sayılır ve finale/yedeğe alınmaz.
+                const { r1, r2, total } = computeRoutineTotals(res.r1, res.r2, rule);
+                return { a, total, scored: r1 != null || r2 != null };
+            }).filter(x => x.scored);
             ranked.sort((x, y) => y.total - x.total);
 
             const finalists = ranked.slice(0, 8);
@@ -105,8 +110,11 @@ export default function CreateFinalsPage() {
             const orderedAthletes = [...groupA, ...groupB];
 
             // Yeni kategori yaz
+            // startList / athletes üst kategoriden MİRAS ALINMAMALI — aksi halde
+            // CJP finalde eleme listesini eleme sırasıyla gösterir.
+            const { startList: _ignoredStartList, athletes: _ignoredAthletes, ...catBase } = cat;
             const finalCat = {
-                ...cat,
+                ...catBase,
                 id: finalId,
                 name: `${cat.name} — FİNAL`,
                 isFinal: true,
@@ -122,7 +130,7 @@ export default function CreateFinalsPage() {
             orderedAthletes.forEach((a, idx) => {
                 const newUid = `${a.id}_final`;
                 const newAth = {
-                    ...a, uniqueId: newUid, originalId: a.id,
+                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
                     category: finalId, categoryId: finalId, catId: finalId,
                     isFinalist: true, isReserve: false,
                     startOrder: idx + 1,
@@ -133,7 +141,7 @@ export default function CreateFinalsPage() {
             reserves.forEach(({ a }, idx) => {
                 const newUid = `${a.id}_final_res`;
                 const newAth = {
-                    ...a, uniqueId: newUid, originalId: a.id,
+                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
                     category: finalId, categoryId: finalId, catId: finalId,
                     isFinalist: true, isReserve: true,
                     startOrder: 100 + idx,
@@ -143,6 +151,10 @@ export default function CreateFinalsPage() {
             });
 
             updates[`competitions/${compId}/startOrder/${finalId}`] = orderIds;
+            // CJP startOrder'ı değil startList'i okuduğu için finali de buraya yaz,
+            // yoksa finalistler shuffle edilmiş A/B sırasıyla değil rastgele sırayla görünür.
+            updates[`competitions/${compId}/categories/${finalId}/startList`] =
+                orderIds.map((id, i) => ({ id, order: i + 1 }));
 
             await update(ref(db), updates);
             toast(`Final oluşturuldu: ${finalists.length} finalist + ${reserves.length} yedek`, 'success');
