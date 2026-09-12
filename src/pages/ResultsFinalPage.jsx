@@ -25,7 +25,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import {
     getScoringRule, getAthleteName, getAthleteClub,
-    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
+    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName, computeTeamRanking,
 } from '../lib/DataService';
 import { useRules, resolveCategoryRules } from '../lib/Rules';
 
@@ -201,66 +201,16 @@ export default function ResultsFinalPage() {
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
         if (!currentCat || !catRules.hasTeam) return [];
-
-        const byClub = {};
-        individualRanking.forEach(row => {
-            const club = getAthleteClub(row.a) || row.a.club || 'Bilinmeyen';
-            if (!byClub[club]) byClub[club] = [];
-            byClub[club].push(row);
+        return computeTeamRanking(individualRanking, {
+            topN: rules.flow.teamTopN,
+            minAthletes: catRules.teamMinAthletes,
+            mode: catRules.teamMode,
+            perRoutineMinAthletes: catRules.teamPerRoutineMinAthletes,
+            routineCount: catRules.routineCount,
         });
-
-        const topN = rules.flow.teamTopN;
-
-        const teams = Object.entries(byClub).map(([club, rows]) => {
-            // Kulübün sporcularını genel toplamına göre sırala (gösterim için).
-            // rows.sort yerine kopya — individualRanking ile aynı nesneler.
-            const byTotal = [...rows].sort((a, b) => b.total - a.total);
-
-            // Seri bazlı yöntem yalnızca kulüpte yeterli sporcu varsa uygulanır:
-            // her serinin en iyi N puanı AYRI AYRI seçilip toplanır, yani
-            // 1. serinin en iyi 3'ü ile 2. serinin en iyi 3'ü farklı sporcular
-            // olabilir.
-            const perRoutine =
-                catRules.teamMode === 'perRoutine' &&
-                rows.length >= catRules.teamPerRoutineMinAthletes;
-
-            let teamTotal;
-            let routineBreakdown = null;
-
-            if (perRoutine) {
-                const bestOf = (key) => [...rows]
-                    .map(r => r[key])
-                    .filter(v => v != null)
-                    .sort((a, b) => b - a)
-                    .slice(0, topN);
-                const r1Best = bestOf('r1');
-                const r2Best = catRules.routineCount >= 2 ? bestOf('r2') : [];
-                teamTotal = [...r1Best, ...r2Best].reduce((a, b) => a + b, 0);
-                routineBreakdown = {
-                    r1: r1Best.reduce((a, b) => a + b, 0),
-                    r2: r2Best.reduce((a, b) => a + b, 0),
-                    r1Count: r1Best.length,
-                    r2Count: r2Best.length,
-                };
-            } else {
-                teamTotal = byTotal.slice(0, topN).reduce((s, r) => s + r.total, 0);
-            }
-
-            return {
-                club,
-                members: byTotal,
-                top3: byTotal.slice(0, topN),
-                teamTotal,
-                perRoutine,
-                routineBreakdown,
-            };
-        });
-
-        teams.sort((a, b) => b.teamTotal - a.teamTotal);
-        return teams;
     }, [
         individualRanking, currentCat, rules.flow.teamTopN,
-        catRules.hasTeam, catRules.teamMode,
+        catRules.hasTeam, catRules.teamMode, catRules.teamMinAthletes,
         catRules.teamPerRoutineMinAthletes, catRules.routineCount,
     ]);
 

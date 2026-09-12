@@ -45,6 +45,9 @@ export const DEFAULT_RULES = {
         finalistCount: 8,
         reserveCount: 2,
         teamTopN: 3,                    // takım puanına sayılan sporcu sayısı
+        // Bir kulübün takım sayılabilmesi için gereken en az sporcu.
+        // Altında kalan kulüpler takım listesinde HİÇ görünmez.
+        teamMinAthletes: 3,
         // Takım puanı nasıl hesaplanır:
         //  'athleteTotal' → en iyi N sporcunun GENEL toplamı (mevcut davranış)
         //  'perRoutine'   → her serinin en iyi N puanı ayrı ayrı toplanır
@@ -115,6 +118,7 @@ export const CATEGORY_RULE_FIELDS = {
     hasDScore:    { label: 'Zorluk (D) puanı', hint: 'Kapalıysa D puanı hiç sorulmaz ve toplama girmez' },
     hasTeam:      { label: 'Takım sıralaması', hint: 'Kapalıysa bu kategori takım puanına girmez' },
     teamMode:     { label: 'Takım puanı yöntemi', hint: 'Sporcu toplamı mı, seri bazlı en iyiler mi' },
+    teamMinAthletes: { label: 'Takım için en az sporcu', hint: 'Kulüpte bu kadar sporcu yoksa takım listesine girmez' },
     teamPerRoutineMinAthletes: { label: 'Seri bazlı için en az sporcu', hint: 'Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır' },
 };
 
@@ -144,6 +148,8 @@ export function resolveCategoryRules(rules, category) {
         hasDScore:    pick('hasDScore', flow.hasDScore) !== false,
         hasTeam:      pick('hasTeam', flow.hasTeam) !== false,
         teamMode:     pick('teamMode', flow.teamMode),
+        teamMinAthletes:
+            Number(pick('teamMinAthletes', flow.teamMinAthletes)) || flow.teamMinAthletes,
         teamPerRoutineMinAthletes:
             Number(pick('teamPerRoutineMinAthletes', flow.teamPerRoutineMinAthletes))
             || flow.teamPerRoutineMinAthletes,

@@ -196,6 +196,9 @@ export default function RulesPage() {
                         hint="Finalistlerin ardından yedek olarak eklenecek sayı" min={0} max={10} step={1} draft={draft} set={set} />
                     <NumField g="flow" k="teamTopN" label="Takım puanına sayılan sporcu"
                         hint="Kulüp sıralamasında en iyi kaç sporcunun puanı toplanır" min={1} max={10} step={1} draft={draft} set={set} />
+                    <NumField g="flow" k="teamMinAthletes" label="Takım için en az sporcu"
+                        hint="Kulüpte bu kadar sporcu yoksa takım listesine hiç girmez"
+                        min={1} max={10} step={1} draft={draft} set={set} />
                     <SelectField g="flow" k="teamMode" label="Takım puanı yöntemi"
                         hint="Sporcu toplamı: en iyi N sporcunun genel toplamı. Seri bazlı: her serinin en iyi N puanı ayrı seçilip toplanır."
                         options={[['athleteTotal', 'Sporcu toplamı (en iyi N sporcu)'], ['perRoutine', 'Seri bazlı (her serinin en iyi N puanı)']]}
@@ -236,6 +239,7 @@ export default function RulesPage() {
                                         <th style={catTh}>D PUANI</th>
                                         <th style={catTh}>TAKIM</th>
                                         <th style={catTh}>TAKIM YÖNTEMİ</th>
+                                        <th style={catTh}>EN AZ SPORCU</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -260,6 +264,8 @@ export default function RulesPage() {
                                                     options={[[true, 'Var'], [false, 'Yok']]} bool toast={toast} />
                                                 <CatCell compId={compId} catId={cat.id} k="teamMode" own={own} eff={eff.teamMode}
                                                     options={[['athleteTotal', 'Sporcu toplamı'], ['perRoutine', 'Seri bazlı']]} toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="teamMinAthletes" own={own} eff={eff.teamMinAthletes}
+                                                    options={[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']]} numeric toast={toast} />
                                             </tr>
                                         );
                                     })}

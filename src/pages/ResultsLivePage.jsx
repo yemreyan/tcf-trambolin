@@ -24,7 +24,7 @@ import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
 import {
     getScoringRule, getAthleteName, getAthleteClub,
-    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
+    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName, computeTeamRanking,
 } from '../lib/DataService';
 import { useRules, resolveCategoryRules } from '../lib/Rules';
 
@@ -145,11 +145,24 @@ export default function ResultsLivePage() {
             }
             const totalPages = Math.max(1, Math.ceil(count / ATHLETES_PER_PAGE));
             for (let p = 0; p < totalPages; p++) {
-                out.push({ cat, page: p, totalPages });
+                out.push({ cat, page: p, totalPages, kind: 'individual' });
+            }
+            // Takımı açık kategorilerde bireysel sayfalardan sonra takım sayfası.
+            // Boşsa (yeterli sporcusu olan kulüp yok) döngüye hiç eklenmez.
+            const cr = resolveCategoryRules(rules, cat);
+            if (cr.hasTeam) {
+                const teams = computeTeamRanking(computeRanking(cat), {
+                    topN: rules.flow.teamTopN,
+                    minAthletes: cr.teamMinAthletes,
+                    mode: cr.teamMode,
+                    perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
+                    routineCount: cr.routineCount,
+                });
+                if (teams.length > 0) out.push({ cat, page: 0, totalPages: 1, kind: 'team' });
             }
         });
         return out;
-    }, [categories, athletes, pairs, excluded, ATHLETES_PER_PAGE]);
+    }, [categories, athletes, pairs, excluded, ATHLETES_PER_PAGE, scores, rules]);
 
     // Otomatik döngü
     useEffect(() => {
@@ -268,7 +281,19 @@ export default function ResultsLivePage() {
         });
     }
 
+    const isTeamView = currentView?.kind === 'team';
     const ranking  = currentView ? computeRanking(currentView.cat) : [];
+    const teamRows = (() => {
+        if (!isTeamView) return [];
+        const cr = resolveCategoryRules(rules, currentView.cat);
+        return computeTeamRanking(ranking, {
+            topN: rules.flow.teamTopN,
+            minAthletes: cr.teamMinAthletes,
+            mode: cr.teamMode,
+            perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
+            routineCount: cr.routineCount,
+        });
+    })();
     const pageStart = currentView ? currentView.page * ATHLETES_PER_PAGE : 0;
     const pageRows  = ranking.slice(pageStart, pageStart + ATHLETES_PER_PAGE);
 
@@ -300,7 +325,8 @@ export default function ResultsLivePage() {
                                 <i className="material-icons-round" style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4, color: '#c084fc' }}>sync</i>
                             )}
                             {currentView.cat.name}
-                            {currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
+                            {isTeamView && ' — TAKIM'}
+                            {!isTeamView && currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
                         </div>
                     )}
                     <button onClick={() => setShowSettings(s => !s)} className="btn btn-sm btn-outline">
@@ -319,12 +345,56 @@ export default function ResultsLivePage() {
                         Kategori bekleniyor...
                     </div>
                 )}
-                {currentView && pageRows.length === 0 && (
+                {/* ── Takım sıralaması ─────────────────────────────── */}
+                {isTeamView && teamRows.map((t, i) => {
+                    const rank = i + 1;
+                    const medal = rank <= 3;
+                    const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : 'white';
+                    return (
+                        <div key={t.club} style={{
+                            display: 'grid', gridTemplateColumns: '60px 1fr 170px',
+                            alignItems: 'center', gap: 16,
+                            padding: '16px 20px', marginBottom: 10,
+                            background: medal ? `${rankColor}12` : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${medal ? `${rankColor}55` : 'rgba(255,255,255,0.06)'}`,
+                            borderRadius: 12,
+                        }}>
+                            <div style={{
+                                fontFamily: "'Space Mono', monospace", fontSize: '1.6rem',
+                                fontWeight: 700, color: rankColor, textAlign: 'center',
+                            }}>
+                                {rank}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{
+                                    fontSize: '1.5rem', fontWeight: 700, color: 'white',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                    {t.club}
+                                </div>
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 2 }}>
+                                    {t.members.length} sporcu
+                                    {t.perRoutine && t.routineBreakdown
+                                        ? ` · seri bazlı (R1 ${t.routineBreakdown.r1.toFixed(3)} + R2 ${t.routineBreakdown.r2.toFixed(3)})`
+                                        : ` · en iyi ${t.top3.length} sporcu`}
+                                </div>
+                            </div>
+                            <div style={{
+                                fontFamily: "'Space Mono', monospace", fontSize: '1.9rem',
+                                fontWeight: 700, color: medal ? rankColor : 'white', textAlign: 'right',
+                            }}>
+                                {t.teamTotal.toFixed(3)}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {currentView && !isTeamView && pageRows.length === 0 && (
                     <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}>
                         Bu kategoride sporcu/puan yok.
                     </div>
                 )}
-                {pageRows.map((row, i) => {
+                {!isTeamView && pageRows.map((row, i) => {
                     const rank  = row.rank;                  // null = henüz puansız
                     const medal = rank != null && rank <= 3;
                     const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : 'white';

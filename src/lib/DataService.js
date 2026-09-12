@@ -454,3 +454,67 @@ export class DataService {
         await update(ref(db), updates);
     }
 }
+
+// ── Takım Sıralaması ──────────────────────────────────────────────────────
+/**
+ * Kulüp bazlı takım sıralaması. Canlı ve final sonuç ekranları aynı sayıyı
+ * göstersin diye tek yerde hesaplanır.
+ *
+ * @param {Array}  rows  [{ a, r1, r2, total }] — bireysel sıralama satırları
+ * @param {object} o     { topN, minAthletes, mode, perRoutineMinAthletes, routineCount }
+ *
+ * Yöntemler:
+ *   'athleteTotal' → en iyi topN sporcunun GENEL toplamı
+ *   'perRoutine'   → her serinin en iyi topN puanı ayrı seçilip toplanır
+ *                    (yalnızca kulüpte perRoutineMinAthletes kadar sporcu varsa)
+ *
+ * minAthletes altındaki kulüpler takım sayılmaz ve listeye hiç girmez.
+ */
+export function computeTeamRanking(rows, o = {}) {
+    const topN         = Number(o.topN) || 3;
+    const minAthletes  = Number(o.minAthletes) || 1;
+    const routineCount = Number(o.routineCount) || 2;
+
+    const byClub = {};
+    (rows || []).forEach(row => {
+        const club = getAthleteClub(row.a) || row.a?.club || 'Bilinmeyen';
+        if (!byClub[club]) byClub[club] = [];
+        byClub[club].push(row);
+    });
+
+    const teams = Object.entries(byClub)
+        // Yeterli sporcusu olmayan kulüp takım değildir
+        .filter(([, rs]) => rs.length >= minAthletes)
+        .map(([club, rs]) => {
+            const byTotal = [...rs].sort((a, b) => b.total - a.total);
+
+            const perRoutine =
+                o.mode === 'perRoutine' &&
+                rs.length >= (Number(o.perRoutineMinAthletes) || 4);
+
+            let teamTotal;
+            let routineBreakdown = null;
+
+            if (perRoutine) {
+                const bestOf = (key) => [...rs]
+                    .map(r => r[key])
+                    .filter(v => v != null)
+                    .sort((a, b) => b - a)
+                    .slice(0, topN);
+                const r1Best = bestOf('r1');
+                const r2Best = routineCount >= 2 ? bestOf('r2') : [];
+                teamTotal = [...r1Best, ...r2Best].reduce((a, b) => a + b, 0);
+                routineBreakdown = {
+                    r1: r1Best.reduce((a, b) => a + b, 0),
+                    r2: r2Best.reduce((a, b) => a + b, 0),
+                };
+            } else {
+                teamTotal = byTotal.slice(0, topN).reduce((s, r) => s + r.total, 0);
+            }
+
+            return { club, members: byTotal, top3: byTotal.slice(0, topN), teamTotal, perRoutine, routineBreakdown };
+        });
+
+    teams.sort((a, b) => b.teamTotal - a.teamTotal);
+    return teams;
+}
