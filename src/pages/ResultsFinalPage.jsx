@@ -25,7 +25,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import {
     getScoringRule, getAthleteName, getAthleteClub,
-    isDNX, formatResultScore, computeRoutineTotals,
+    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
 
 export default function ResultsFinalPage() {
@@ -91,6 +91,14 @@ export default function ResultsFinalPage() {
     const rule       = currentCat ? getScoringRule(currentCat) : 'sum';
     const isSync     = currentCat?.type === 'sync';
 
+
+    // Çift adını ad+soyad olarak kurmak için kimliğe göre sporcu haritası
+    const athletesById = useMemo(() => {
+        const m = {};
+        athletes.forEach(a => { if (a?.id) m[a.id] = a; });
+        return m;
+    }, [athletes]);
+
     // Sporcu kategori eşleşmesi (id veya isim)
     function athleteInCategory(a, cat) {
         if (!a || !cat) return false;
@@ -129,11 +137,11 @@ export default function ResultsFinalPage() {
                     rows.push({
                         a: {
                             id: pair.id,
-                            name: pair.displayName,
+                            name: getPairDisplayName(pair, athletesById),
                             surname: '',
                             club: pair.club || a.club || '',
                             isPair: true,
-                            pairName: pair.displayName,
+                            pairName: getPairDisplayName(pair, athletesById),
                         },
                         r1, r2, total,
                         r1d, r2d,
@@ -183,7 +191,7 @@ export default function ResultsFinalPage() {
         });
         unscored.forEach(r => { r.rank = null; });
         return [...scored, ...unscored];
-    }, [athletes, pairs, scores, currentCat, rule, isSync]);
+    }, [athletes, athletesById, pairs, scores, currentCat, rule, isSync]);
 
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
@@ -260,7 +268,7 @@ export default function ResultsFinalPage() {
                         const res = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
                         // DNS/DNF → sıralama dışı (null)
                         const { r1, r2, total: tot } = computeRoutineTotals(res.r1, res.r2, r);
-                        rows.push({ name: pair.displayName, club: pair.club || a.club || '', r1, r2, total: tot, s1: res.r1?.status, s2: res.r2?.status });
+                        rows.push({ name: getPairDisplayName(pair, athletesById), club: pair.club || a.club || '', r1, r2, total: tot, s1: res.r1?.status, s2: res.r2?.status });
                     } else {
                         const res = scores[a.uniqueId] || scores[a.id] || {};
                         const { r1, r2, total: tot } = computeRoutineTotals(res.r1, res.r2, r);
@@ -332,7 +340,7 @@ export default function ResultsFinalPage() {
                         const r2d  = res.r2 || null;
                         // DNS/DNF → sıralama dışı (null)
                         const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
-                        rows.push({ name: pair.displayName || '—', club: pair.club || a.club || '', v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                        rows.push({ name: getPairDisplayName(pair, athletesById) || '—', club: pair.club || a.club || '', v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
                     } else {
                         const res = scores[a.uniqueId] || scores[a.id] || {};
                         const r1d = res.r1 || null; const r2d = res.r2 || null;

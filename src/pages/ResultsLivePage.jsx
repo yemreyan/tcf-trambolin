@@ -24,7 +24,7 @@ import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
 import {
     getScoringRule, getAthleteName, getAthleteClub,
-    isDNX, formatResultScore, computeRoutineTotals,
+    isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
 
 const ATHLETES_PER_PAGE = 10;
@@ -104,6 +104,14 @@ export default function ResultsLivePage() {
         const t = setInterval(() => setClock(new Date().toLocaleTimeString('tr-TR')), 1000);
         return () => clearInterval(t);
     }, []);
+
+
+    // Çift adını ad+soyad olarak kurmak için kimliğe göre sporcu haritası
+    const athletesById = useMemo(() => {
+        const m = {};
+        athletes.forEach(a => { if (a?.id) m[a.id] = a; });
+        return m;
+    }, [athletes]);
 
     // Kategori eşleştirme — id, isim veya tüm bilinen alanlardan biri uyuşursa true
     function athleteInCategory(a, cat) {
@@ -187,11 +195,11 @@ export default function ResultsLivePage() {
                     rows.push({
                         a: {
                             id: pair.id,
-                            name: pair.displayName,
+                            name: getPairDisplayName(pair, athletesById),
                             surname: '',
                             club: pair.club || a.club || '',
                             isPair: true,
-                            pairName: pair.displayName,
+                            pairName: getPairDisplayName(pair, athletesById),
                         },
                         r1, r2, s1, s2, total,
                     });

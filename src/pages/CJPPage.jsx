@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, get, set, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { DataService, getAthleteName, getAthleteClub } from '../lib/DataService';
+import { DataService, getAthleteName, getAthleteClub, getPairDisplayName } from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import PasswordGate from '../components/PasswordGate';
@@ -125,6 +125,8 @@ export default function CJPPage() {
 
     // ── Veri ─────────────────────────────────────────────────────────────
     const [allAthletes, setAllAthletes] = useState([]);
+    // Kimliğe göre ham sporcu kayıtları — çift adını ad+soyad olarak kurmak için
+    const [athletesById, setAthletesById] = useState({});
     const [allCategories, setAllCategories] = useState({});
     const [juryPanels, setJuryPanels] = useState({});
     const [competitionResults, setCompetitionResults] = useState({});
@@ -224,6 +226,7 @@ export default function CJPPage() {
             const globalAthletes = comp.athletes || {};
             const panels = comp.juryPanels || {};
 
+            setAthletesById(globalAthletes);
             setAllCategories(cats);
             setJuryPanels(panels);
 
@@ -623,14 +626,17 @@ export default function CJPPage() {
                 if (!seenPairs.has(a.pairId)) {
                     seenPairs.add(a.pairId);
                     const pair = allPairs[a.pairId];
+                    // Eski çiftlerde displayName yalnızca soyadları içeriyor;
+                    // ad+soyad sporcu kayıtlarından kurulur
+                    const pairLabel = getPairDisplayName(pair, athletesById);
                     // Pair nesnesini CJP sporcu formatına çevir
                     result.push({
                         ...a,
                         uniqueId: pair.id,
                         isPair: true,
                         pairId: pair.id,
-                        pairName: pair.displayName,
-                        name: pair.displayName,
+                        pairName: pairLabel,
+                        name: pairLabel,
                         surname: '',
                         club: pair.club || a.club || '',
                     });

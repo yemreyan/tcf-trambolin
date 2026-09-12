@@ -73,6 +73,27 @@ export function getAthleteName(ath) {
 }
 
 /**
+ * Senkron çiftin görünen adını üretir: "Ad Soyad & Ad Soyad".
+ *
+ * Çiftler oluşturulurken displayName alanına yalnızca soyadlar yazılıyordu,
+ * bu yüzden isim mevcut kayıtlardan okunamıyor. Sporcu kayıtları verilirse
+ * ad+soyad buradan kurulur; verilmezse/bulunamazsa kayıtlı ada düşülür.
+ *
+ * @param {object} pair  competitions/{id}/pairs/{pairId}
+ * @param {object} athletesById  { [athleteId]: athlete }
+ */
+export function getPairDisplayName(pair, athletesById) {
+    if (!pair) return '';
+    const a1 = athletesById?.[pair.athlete1Id];
+    const a2 = athletesById?.[pair.athlete2Id];
+    if (a1 || a2) {
+        const full = [a1, a2].filter(Boolean).map(getAthleteName).filter(Boolean).join(' & ');
+        if (full) return full;
+    }
+    return pair.displayName || '';
+}
+
+/**
  * Sporcu kulübü/okul adını çıkarır (farklı alan isimleri desteğiyle).
  */
 export function getAthleteClub(ath) {
@@ -311,7 +332,8 @@ export class DataService {
 
     async createPair(ath1, ath2, categoryId) {
         const pairId = Utils.id('pair');
-        const displayName = `${ath1.surname || ath1.name} & ${ath2.surname || ath2.name}`;
+        // Yalnızca soyad yazılıyordu; isim de görünsün
+        const displayName = `${getAthleteName(ath1)} & ${getAthleteName(ath2)}`.trim();
         const pair = {
             id: pairId,
             categoryId,
