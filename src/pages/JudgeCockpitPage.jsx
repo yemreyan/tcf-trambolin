@@ -58,6 +58,11 @@ export default function JudgeCockpitPage() {
     // sıfırlama yapılabilmesi için sporcu kimliği + zaman damgası tutulur.
     const lastCallRef = useRef(null);
 
+    // Bu çağrı için başlangıç durumu alındı mı? Kendi düğümünü dinleyen
+    // listener her yazımda tetiklendiği için geri yükleme TEK SEFERLİK olmalı;
+    // aksi halde hakem giriş yaparken uzaktan gelen eski değer üzerine biner.
+    const hydratedRef = useRef(false);
+
     // Girdi alanlarını sıfırla (yeni çağrı veya CJP iptali sonrası)
     const resetEntry = useCallback(() => {
         setDeductions(Array(JUMP_COUNT).fill(0));
@@ -65,6 +70,23 @@ export default function JudgeCockpitPage() {
         setFocused(0);
         setDVal('');
         setSubmitted(false);
+    }, []);
+
+    // Firebase'deki kendi kaydından durumu geri yükle (sayfa yenilenmesi,
+    // tabletin uyuması, sekmenin kapanıp açılması).
+    const hydrateFrom = useCallback((data) => {
+        if (!data) return;
+        // `scores` eski alan adı — geriye dönük uyumluluk
+        const stored = data.deductions || data.scores;
+        if (Array.isArray(stored)) {
+            const arr = Array(JUMP_COUNT).fill(0);
+            stored.slice(0, JUMP_COUNT).forEach((v, i) => { arr[i] = Number(v) || 0; });
+            setDeductions(arr);
+        }
+        if (data.landing != null) setLanding(Number(data.landing) || 0);
+        if (data.val != null) setDVal(String(data.val));
+        // Gönderilmiş bir not yenilendiğinde yine gönderilmiş görünmeli
+        setSubmitted(data.submitted === true);
     }, []);
 
     // ── Şifre Kapısı ──────────────────────────────────────────────────────
@@ -99,8 +121,14 @@ export default function JudgeCockpitPage() {
                     ctx?.routine ?? '',
                 ].join('#');
 
-                if (lastCallRef.current !== callToken) {
+                if (lastCallRef.current === null) {
+                    // İlk yükleme — sıfırlama YOK. Ekran yenilenmiş olabilir,
+                    // durum aşağıdaki kendi düğümü dinleyicisinden gelir.
                     lastCallRef.current = callToken;
+                } else if (lastCallRef.current !== callToken) {
+                    // Gerçek yeni çağrı — CJP hakem verilerini de sildi
+                    lastCallRef.current = callToken;
+                    hydratedRef.current = true; // artık yerel giriş esas
                     resetEntry();
                     if (navigator.vibrate) navigator.vibrate(200);
                 }
@@ -108,19 +136,32 @@ export default function JudgeCockpitPage() {
             }
         );
 
-        // Kendi düğümünü dinle: CJP bu hakemin notunu iptal ederse (düğüm
-        // silinir) ekran kilidi kendiliğinden açılır ve girdiler sıfırlanır.
-        // Diğer hakemlerin notlarına dokunulmaz.
+        // Kendi düğümünü dinle:
+        // - Düğüm yoksa (CJP notu iptal etti veya yeni çağrı) kilit açılır,
+        //   girdiler sıfırlanır. Diğer hakemlerin notlarına dokunulmaz.
+        // - Düğüm varsa ve bu ekran henüz durumunu almadıysa geri yüklenir
+        //   (sayfa yenilendiğinde değerler kaybolmasın).
         ownUnsubRef.current = onValue(
             ref(db, `live/${compId}/panels/${panel}/scores/judges/${judgeKey}`),
-            snap => { if (!snap.exists()) resetEntry(); }
+            snap => {
+                if (!snap.exists()) {
+                    hydratedRef.current = true;
+                    resetEntry();
+                    return;
+                }
+                if (!hydratedRef.current) {
+                    hydratedRef.current = true;
+                    hydrateFrom(snap.val());
+                }
+                // Zaten yüklendiyse yoksay — yerel giriş esastır
+            }
         );
 
         return () => {
             if (unsubRef.current) unsubRef.current();
             if (ownUnsubRef.current) ownUnsubRef.current();
         };
-    }, [unlocked, compId, panel, judgeKey, resetEntry]);
+    }, [unlocked, compId, panel, judgeKey, resetEntry, hydrateFrom]);
 
     // ── İnaktivite ────────────────────────────────────────────────────────
     useEffect(() => {
