@@ -348,9 +348,9 @@ export default function JudgeCockpitPage() {
     const shownJumps = elementCount || JUMP_COUNT;
     const eTotal = deductions.slice(0, shownJumps).reduce((a, b) => a + b, 0) + landing;
 
-    // Gönderim hazır mı — CJP eleman sayısını yazmadan puanlanacak eleman
-    // sayısı bilinmiyor, referans sistemde olduğu gibi gönderim kilitlenir.
-    const canSubmit = elementCount !== null && !!athlete;
+    // CJP eleman sayısını yazmamışsa (sporcu bu sürümden önce sahaya
+    // çağrılmışsa olur) 10 elemanla devam edilir — puanlama kilitlenmez.
+    const canSubmit = !!athlete;
     const filledCount = entered.slice(0, shownJumps).filter(Boolean).length + (landingEntered ? 1 : 0);
 
     // ── Unlock ────────────────────────────────────────────────────────────
@@ -675,18 +675,6 @@ export default function JudgeCockpitPage() {
                 gap: 'clamp(12px, 2.5vh, 28px)', padding: 'clamp(12px, 2vw, 28px)',
                 maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box',
             }}>
-                {/* CJP eleman sayısını yazmadıysa uyar */}
-                {athlete && elementCount === null && (
-                    <div style={{
-                        background: 'rgba(234,179,8,0.12)',
-                        border: '1px solid rgba(234,179,8,0.4)', borderRadius: 12,
-                        padding: '10px 16px', color: '#eab308',
-                        fontSize: 'clamp(0.75rem, 1.6vw, 0.95rem)',
-                        fontWeight: 600, textAlign: 'center',
-                    }}>
-                        Başhakem hareket sayısını henüz girmedi — gönderim kapalı.
-                    </div>
-                )}
 
                 {/* Kutular — #1..#N + L, hepsi tek satırda */}
                 <div style={{
@@ -741,7 +729,7 @@ export default function JudgeCockpitPage() {
                 <button
                     onClick={handleSubmit}
                     disabled={!canSubmit || submitted}
-                    title={canSubmit ? '' : 'Başhakem hareket sayısını girmeden gönderilemez'}
+                    title={canSubmit ? '' : 'Sahada sporcu yok'}
                     style={{
                         width: '100%', padding: 'clamp(10px, 2vh, 18px)',
                         borderRadius: 12, border: 'none',
