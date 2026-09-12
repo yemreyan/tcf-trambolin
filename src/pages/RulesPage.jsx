@@ -216,6 +216,14 @@ export default function RulesPage() {
                         hint="Kapalıysa D puanı toplama girmez ve başhakemde gösterilmez" draft={draft} set={set} />
                     <BoolField g="flow" k="hasTeam" label="Takım sıralaması yapılıyor"
                         hint="Kapalıysa takım sekmesi boş kalır" draft={draft} set={set} />
+                    <SelectField g="flow" k="finalTeamSource" label="Finalde takım puanı kaynağı"
+                        hint="Finalde kulüp başına 1-2 sporcu kaldığı için takım kurulamaz. Varsayılan: takım sıralaması eleme sonuçlarından alınır."
+                        options={[
+                            ['qualification', 'Eleme sonuçlarından (önerilen)'],
+                            ['final', 'Finaldeki puanlardan'],
+                            ['none', 'Finalde takım gösterme'],
+                        ]}
+                        draft={draft} set={set} />
                 </Section>
 
                 {/* ── Ekran / oturum ─────────────────────────────────────── */}
@@ -243,6 +251,7 @@ export default function RulesPage() {
                                         <th style={catTh}>TAKIM</th>
                                         <th style={catTh}>TAKIM YÖNTEMİ</th>
                                         <th style={catTh}>EN AZ SPORCU</th>
+                                        <th style={catTh}>FİNALDE TAKIM</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -255,6 +264,9 @@ export default function RulesPage() {
                                                     {cat.name}
                                                     {cat.type === 'sync' && (
                                                         <span style={{ color: '#c084fc', fontSize: '0.7rem', marginLeft: 6 }}>SENKRON</span>
+                                                    )}
+                                                    {cat.isFinal && (
+                                                        <span style={{ color: '#E02828', fontSize: '0.7rem', marginLeft: 6 }}>FİNAL</span>
                                                     )}
                                                 </td>
                                                 <CatCell compId={compId} catId={cat.id} k="scoringRule" own={own} eff={eff.scoringRule}
@@ -269,6 +281,8 @@ export default function RulesPage() {
                                                     options={[['athleteTotal', 'Sporcu toplamı'], ['perRoutine', 'Seri bazlı']]} toast={toast} />
                                                 <CatCell compId={compId} catId={cat.id} k="teamMinAthletes" own={own} eff={eff.teamMinAthletes}
                                                     options={[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']]} numeric toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="finalTeamSource" own={own} eff={eff.finalTeamSource}
+                                                    options={[['qualification', 'Elemeden'], ['final', 'Finalden'], ['none', 'Gösterme']]} toast={toast} />
                                             </tr>
                                         );
                                     })}

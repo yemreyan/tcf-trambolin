@@ -26,7 +26,7 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName, computeTeamRanking,
 } from '../lib/DataService';
-import { useRules, resolveCategoryRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules, resolveTeamSourceCategory } from '../lib/Rules';
 
 
 
@@ -150,9 +150,11 @@ export default function ResultsLivePage() {
             }
             // Takımı açık kategorilerde bireysel sayfalardan sonra takım sayfası.
             // Boşsa (yeterli sporcusu olan kulüp yok) döngüye hiç eklenmez.
-            const cr = resolveCategoryRules(rules, cat);
-            if (cr.hasTeam) {
-                const teams = computeTeamRanking(computeRanking(cat), {
+            // Final kategorilerinde takım puanı ELEME kategorisinden gelir.
+            const srcCat = resolveTeamSourceCategory(rules, cat, categories);
+            const cr = srcCat ? resolveCategoryRules(rules, srcCat) : null;
+            if (srcCat && cr.hasTeam) {
+                const teams = computeTeamRanking(computeRanking(srcCat), {
                     topN: rules.flow.teamTopN,
                     minAthletes: cr.teamMinAthletes,
                     mode: cr.teamMode,
@@ -292,10 +294,13 @@ export default function ResultsLivePage() {
 
     const isTeamView = currentView?.kind === 'team';
     const ranking  = currentView ? computeRanking(currentView.cat) : [];
+    // Final kategorisinde takım kaynağı eleme kategorisidir.
+    const teamSrcCat   = currentView ? resolveTeamSourceCategory(rules, currentView.cat, categories) : null;
+    const teamFromQual = !!teamSrcCat && !!currentView && teamSrcCat.id !== currentView.cat.id;
     const teamRows = (() => {
-        if (!isTeamView) return [];
-        const cr = resolveCategoryRules(rules, currentView.cat);
-        const all = computeTeamRanking(ranking, {
+        if (!isTeamView || !teamSrcCat) return [];
+        const cr = resolveCategoryRules(rules, teamSrcCat);
+        const all = computeTeamRanking(teamFromQual ? computeRanking(teamSrcCat) : ranking, {
             topN: rules.flow.teamTopN,
             minAthletes: cr.teamMinAthletes,
             mode: cr.teamMode,
@@ -355,7 +360,7 @@ export default function ResultsLivePage() {
                                 <i className="material-icons-round" style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4, color: '#c084fc' }}>sync</i>
                             )}
                             {currentView.cat.name}
-                            {isTeamView && ' — TAKIM'}
+                            {isTeamView && (teamFromQual ? ' — TAKIM (ELEME)' : ' — TAKIM')}
                             {currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
                         </div>
                     )}

@@ -27,7 +27,7 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName, computeTeamRanking,
 } from '../lib/DataService';
-import { useRules, resolveCategoryRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules, resolveTeamSourceCategory } from '../lib/Rules';
 
 export default function ResultsFinalPage() {
     const navigate  = useNavigate();
@@ -198,21 +198,78 @@ export default function ResultsFinalPage() {
         return [...scored, ...unscored];
     }, [athletes, athletesById, pairs, scores, currentCat, rule, isSync]);
 
+    // ── Kategori satırlarını kur (ekran + yazdırma ortak) ─────────────────
+    function buildRows(cat) {
+        const cr    = resolveCategoryRules(rules, cat);
+        const sync  = cat.type === 'sync';
+        const rows  = [];
+        const pById = {};
+        Object.values(pairs).forEach(p => { if (p?.id) pById[p.id] = p; });
+        const catAths = athletes.filter(a => athleteInCategory(a, cat));
+
+        const push = (nameVal, clubVal, res, aRef) => {
+            const r1d = res.r1 || null;
+            const r2d = res.r2 || null;
+            const { r1, r2, total } = computeRoutineTotals(r1d, r2d, cr.scoringRule);
+            rows.push({ name: nameVal, club: clubVal, r1, r2, total, a: aRef, s1: r1d?.status, s2: r2d?.status });
+        };
+
+        if (sync) {
+            const seen = new Set();
+            catAths.forEach(a => {
+                if (a.pairId && pById[a.pairId]) {
+                    if (seen.has(a.pairId)) return;
+                    seen.add(a.pairId);
+                    const pair = pById[a.pairId];
+                    const res = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
+                    push(getPairDisplayName(pair, athletesById) || '—', pair.club || a.club || '', res, a);
+                } else {
+                    push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
+                }
+            });
+        } else {
+            catAths.forEach(a => {
+                push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
+            });
+        }
+
+        const scored   = rows.filter(x => x.r1 != null || x.r2 != null).sort((a, b) => b.total - a.total);
+        const unscored = rows.filter(x => x.r1 == null && x.r2 == null);
+        let lv = null, lr = 0;
+        scored.forEach((x, i) => {
+            if (lv !== null && x.total === lv) x.rank = lr;
+            else { x.rank = i + 1; lr = x.rank; lv = x.total; }
+        });
+        unscored.forEach(x => { x.rank = null; });
+        return { rows: [...scored, ...unscored], cr };
+    }
+
+    // Takım sıralaması hangi kategoriden beslenecek?
+    // Final kategorilerinde varsayılan kaynak ELEME kategorisidir; finalde
+    // kulüp başına 1-2 sporcu kaldığı için finalin kendi puanlarıyla takım
+    // kurulamıyordu ve liste boş görünüyordu.
+    const teamSrcCat  = resolveTeamSourceCategory(rules, currentCat, categories);
+    const teamCr      = teamSrcCat ? resolveCategoryRules(rules, teamSrcCat) : null;
+    const teamFromQual = !!teamSrcCat && !!currentCat && teamSrcCat.id !== currentCat.id;
+    const showTeamTab = !!teamSrcCat && !!teamCr?.hasTeam;
+
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
-        if (!currentCat || !catRules.hasTeam) return [];
-        return computeTeamRanking(individualRanking, {
+        if (!showTeamTab) return [];
+        // Kaynak kategori final değilse zaten ekrandaki satırlar; eleme ise
+        // o kategorinin satırları yeniden kurulur.
+        const rows = teamFromQual ? buildRows(teamSrcCat).rows : individualRanking;
+        return computeTeamRanking(rows, {
             topN: rules.flow.teamTopN,
-            minAthletes: catRules.teamMinAthletes,
-            mode: catRules.teamMode,
-            perRoutineMinAthletes: catRules.teamPerRoutineMinAthletes,
-            routineCount: catRules.routineCount,
-            scoringRule: catRules.scoringRule,
+            minAthletes: teamCr.teamMinAthletes,
+            mode: teamCr.teamMode,
+            perRoutineMinAthletes: teamCr.teamPerRoutineMinAthletes,
+            routineCount: teamCr.routineCount,
+            scoringRule: teamCr.scoringRule,
         });
     }, [
-        individualRanking, currentCat, rules.flow.teamTopN,
-        catRules.hasTeam, catRules.teamMode, catRules.teamMinAthletes,
-        catRules.teamPerRoutineMinAthletes, catRules.routineCount,
+        individualRanking, currentCat, categories, athletes, pairs, scores,
+        rules, showTeamTab, teamFromQual, teamSrcCat?.id,
     ]);
 
     // ── Formatlama yardımcıları ───────────────────────────────────────────
@@ -344,51 +401,6 @@ export default function ResultsFinalPage() {
         const medal = (rank) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : (rank ?? '—');
 
         // ── Kategori satırlarını kur (ekrandakiyle aynı mantık) ──────────
-        function buildRows(cat) {
-            const cr    = resolveCategoryRules(rules, cat);
-            const sync  = cat.type === 'sync';
-            const rows  = [];
-            const pById = {};
-            Object.values(pairs).forEach(p => { if (p?.id) pById[p.id] = p; });
-            const catAths = athletes.filter(a => athleteInCategory(a, cat));
-
-            const push = (nameVal, clubVal, res, aRef) => {
-                const r1d = res.r1 || null;
-                const r2d = res.r2 || null;
-                const { r1, r2, total } = computeRoutineTotals(r1d, r2d, cr.scoringRule);
-                rows.push({ name: nameVal, club: clubVal, r1, r2, total, a: aRef, s1: r1d?.status, s2: r2d?.status });
-            };
-
-            if (sync) {
-                const seen = new Set();
-                catAths.forEach(a => {
-                    if (a.pairId && pById[a.pairId]) {
-                        if (seen.has(a.pairId)) return;
-                        seen.add(a.pairId);
-                        const pair = pById[a.pairId];
-                        const res = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
-                        push(getPairDisplayName(pair, athletesById) || '—', pair.club || a.club || '', res, a);
-                    } else {
-                        push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
-                    }
-                });
-            } else {
-                catAths.forEach(a => {
-                    push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
-                });
-            }
-
-            const scored   = rows.filter(x => x.r1 != null || x.r2 != null).sort((a, b) => b.total - a.total);
-            const unscored = rows.filter(x => x.r1 == null && x.r2 == null);
-            let lv = null, lr = 0;
-            scored.forEach((x, i) => {
-                if (lv !== null && x.total === lv) x.rank = lr;
-                else { x.rank = i + 1; lr = x.rank; lv = x.total; }
-            });
-            unscored.forEach(x => { x.rank = null; });
-            return { rows: [...scored, ...unscored], cr };
-        }
-
         // ── Sayfa iskeleti ───────────────────────────────────────────────
         const page = (cat, subtitle, tableHtml, note) => `
             <div class="page">
@@ -451,20 +463,29 @@ export default function ResultsFinalPage() {
             body += page(cat, 'RESMÎ SONUÇ LİSTESİ — BİREYSEL', indTable, ruleTxt);
 
             // ── Takım ───────────────────────────────────────────────────
-            if (!cr.hasTeam) return;
-            const teams = computeTeamRanking(rows, {
+            // Final kategorilerinde takım puanı kural gereği ELEME
+            // kategorisinden gelir (ekrandaki davranışın aynısı).
+            const srcCat = resolveTeamSourceCategory(rules, cat, categories);
+            if (!srcCat) return;
+            const tcr = resolveCategoryRules(rules, srcCat);
+            if (!tcr.hasTeam) return;
+            const fromQual = srcCat.id !== cat.id;
+            const teamRows = fromQual ? buildRows(srcCat).rows : rows;
+
+            const teams = computeTeamRanking(teamRows, {
                 topN: rules.flow.teamTopN,
-                minAthletes: cr.teamMinAthletes,
-                mode: cr.teamMode,
-                perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
-                routineCount: cr.routineCount,
-                scoringRule: cr.scoringRule,
+                minAthletes: tcr.teamMinAthletes,
+                mode: tcr.teamMode,
+                perRoutineMinAthletes: tcr.teamPerRoutineMinAthletes,
+                routineCount: tcr.routineCount,
+                scoringRule: tcr.scoringRule,
             });
             if (teams.length === 0) return;
 
-            const teamNote = teams[0].perRoutine
-                ? `Takım puanı = her serinin en iyi ${rules.flow.teamTopN} puanı toplanır · en az ${cr.teamMinAthletes} sporcu`
-                : `Takım puanı = en iyi ${rules.flow.teamTopN} sporcunun toplamı · en az ${cr.teamMinAthletes} sporcu`;
+            const teamNote = (teams[0].perRoutine
+                ? `Takım puanı = her serinin en iyi ${rules.flow.teamTopN} puanı toplanır · en az ${tcr.teamMinAthletes} sporcu`
+                : `Takım puanı = en iyi ${rules.flow.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
+                + (fromQual ? ` · Kaynak: ${srcCat.name} (eleme) sonuçları` : '');
 
             const teamTable = `
                 <table>
@@ -492,7 +513,12 @@ export default function ResultsFinalPage() {
                             </tr>`).join('')}
                     </tbody>
                 </table>`;
-            body += page(cat, 'RESMÎ SONUÇ LİSTESİ — TAKIM', teamTable, teamNote);
+            body += page(
+                cat,
+                fromQual ? 'RESMÎ SONUÇ LİSTESİ — TAKIM (ELEME SONUÇLARINA GÖRE)'
+                         : 'RESMÎ SONUÇ LİSTESİ — TAKIM',
+                teamTable, teamNote,
+            );
         });
 
         if (!body) {
@@ -620,10 +646,12 @@ export default function ResultsFinalPage() {
                         onClick={() => setActiveTab('ind')}>
                         GENEL TASNİF
                     </button>
-                    <button className={'btn ' + (activeTab === 'team' ? 'btn-primary' : 'btn-outline')}
-                        onClick={() => setActiveTab('team')}>
-                        TAKIM SIRALAMASI
-                    </button>
+                    {showTeamTab && (
+                        <button className={'btn ' + (activeTab === 'team' ? 'btn-primary' : 'btn-outline')}
+                            onClick={() => setActiveTab('team')}>
+                            TAKIM SIRALAMASI
+                        </button>
+                    )}
                 </div>
 
                 {/* İçerik */}
@@ -662,6 +690,12 @@ export default function ResultsFinalPage() {
                         {!currentCat && (
                             <div className="text-center text-muted" style={{ padding: 40 }}>
                                 Lütfen kategori seçin
+                            </div>
+                        )}
+
+                        {currentCat && activeTab === 'team' && !showTeamTab && (
+                            <div className="text-center text-muted" style={{ padding: 40 }}>
+                                Bu kategoride takım sıralaması yapılmaz.
                             </div>
                         )}
 
@@ -768,11 +802,23 @@ export default function ResultsFinalPage() {
                         )}
 
                         {/* ── TAKIM SIRALAMASI ──────────────────────────── */}
-                        {currentCat && activeTab === 'team' && (
+                        {currentCat && activeTab === 'team' && showTeamTab && (
                             <div>
+                                {teamFromQual && (
+                                    <div style={{
+                                        margin: '14px 16px 4px', padding: '10px 14px', borderRadius: 10,
+                                        background: 'rgba(124,135,216,0.10)',
+                                        border: '1px solid rgba(124,135,216,0.28)',
+                                        color: '#9aa4e6', fontSize: '0.82rem', fontWeight: 600,
+                                    }}>
+                                        Takım sıralaması <b>{teamSrcCat.name}</b> (eleme) puanlarından
+                                        hesaplanır — finalde kulüp başına yeterli sporcu kalmaz.
+                                    </div>
+                                )}
                                 {teamRanking.length === 0 && (
                                     <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
-                                        Takım oluşturacak kadar sporcusu olan kulüp yok.
+                                        Takım oluşturacak kadar sporcusu olan kulüp yok
+                                        (en az {teamCr.teamMinAthletes} puan almış sporcu gerekir).
                                     </div>
                                 )}
 

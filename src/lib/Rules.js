@@ -65,6 +65,13 @@ export const DEFAULT_RULES = {
         // perRoutine yalnızca kulüpte bu kadar sporcu varsa uygulanır;
         // altındaysa athleteTotal'a düşülür.
         teamPerRoutineMinAthletes: 4,
+        // FİNAL kategorisinde takım sıralaması hangi puanlardan hesaplanır?
+        //  'qualification' → ELEME kategorisinin puanları (resmî uygulama).
+        //                    Finalde kulüp başına 1-2 sporcu kaldığı için
+        //                    finalin kendi puanlarıyla takım kurulamaz.
+        //  'final'         → yalnızca finaldeki sporcuların puanları
+        //  'none'          → final kategorisinde takım hiç gösterilmez
+        finalTeamSource: 'qualification',
     },
 
     // ── Ekran ve oturum ───────────────────────────────────────────────────
@@ -132,6 +139,7 @@ export const CATEGORY_RULE_FIELDS = {
     teamMode:     { label: 'Takım puanı yöntemi', hint: 'Sporcu toplamı mı, seri bazlı en iyiler mi' },
     teamMinAthletes: { label: 'Takım için en az sporcu', hint: 'Kulüpte bu kadar sporcu yoksa takım listesine girmez' },
     teamPerRoutineMinAthletes: { label: 'Seri bazlı için en az sporcu', hint: 'Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır' },
+    finalTeamSource: { label: 'Finalde takım kaynağı', hint: 'Final kategorisinde takım puanı eleme mi finalden mi hesaplanır' },
 };
 
 /**
@@ -167,7 +175,31 @@ export function resolveCategoryRules(rules, category) {
         teamPerRoutineMinAthletes:
             Number(pick('teamPerRoutineMinAthletes', flow.teamPerRoutineMinAthletes))
             || flow.teamPerRoutineMinAthletes,
+        finalTeamSource: pick('finalTeamSource', flow.finalTeamSource) || 'qualification',
     };
+}
+
+/**
+ * Takım sıralamasının hangi kategorinin puanlarından hesaplanacağını söyler.
+ *
+ * Normal (eleme) kategorilerde kategori kendisidir. FİNAL kategorilerinde
+ * kulüp başına yalnızca 1-2 finalist kaldığı için finalin kendi puanlarıyla
+ * takım kurulamaz; bu yüzden varsayılan olarak ELEME kategorisi kullanılır.
+ *
+ * @returns {object|null} kaynak kategori — takım gösterilmeyecekse null
+ */
+export function resolveTeamSourceCategory(rules, category, categories) {
+    if (!category) return null;
+    if (!category.isFinal) return category;
+
+    const src = resolveCategoryRules(rules, category).finalTeamSource;
+    if (src === 'none')  return null;
+    if (src === 'final') return category;
+
+    // 'qualification' — üst (eleme) kategori. Bulunamazsa finalin kendisi.
+    const parentId = category.parentCategoryId;
+    const parent = parentId ? (categories?.[parentId] || null) : null;
+    return parent || category;
 }
 
 /**
