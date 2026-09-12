@@ -114,6 +114,21 @@ export default function PanelPage() {
                         accentColor="var(--accent-primary)"
                     />
 
+                    <MenuCard
+                        icon="verified_user" title="Üst Jüri" desc="Sahadaki sporcunun tüm ayrıntısı"
+                        onClick={() => {
+                            // CJP ile aynı mantık: panel seçilmeden açılmaz
+                            if (panelIds.length === 1) {
+                                window.open(`/superior-jury?panel=${panelIds[0]}&comp=${compId}`, '_blank');
+                            } else {
+                                setStep('groups');
+                                setSelectedPanelId(null);
+                                setJudgeModal(true);
+                            }
+                        }}
+                        accentColor="#0ea5e9"
+                    />
+
                     <MenuCard icon="people" title="Jüri Yönetimi" desc="Hakem İsimlerini Ata" onClick={() => navigate('/jury')} />
                     <MenuCard icon="tv" title="Skorboard" desc="Seyirci ekranı (Projeksiyon)" onClick={() => window.open(`/scoreboard?comp=${compId}`, '_blank')} />
 

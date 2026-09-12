@@ -17,96 +17,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, get, set, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { DataService, getAthleteName, getAthleteClub, getPairDisplayName } from '../lib/DataService';
+import {
+    DataService, getAthleteName, getAthleteClub, getPairDisplayName,
+    calcEScore, calcElementDeductions, getDScoreFromJudge,
+} from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import PasswordGate from '../components/PasswordGate';
-
-// ── E Skor Hesaplama (FIG kuralı — HTML cjp.html ile birebir aynı) ───────
-// Her element için 6 hakemden en yüksek 2 + en düşük 2 kesilir, kalan toplanır.
-// Landing ayrıca aynı şekilde kesilir.
-// Not: JudgeCockpitPage `deductions` alanı olarak yazar (HTML ile uyumlu).
-// Bireysel: base = elementCount × 2 (maks 20.0)
-// Senkron:  base = elementCount × 1 (maks 10.0)  ← FIG Senkron kuralı
-function calcEScore(judgesData, elementCount = 10, isSync = false) {
-    const base = isSync ? elementCount : elementCount * 2;
-
-    function trimDeductions(arr) {
-        if (arr.length >= 6) {
-            arr.sort((a, b) => a - b);
-            arr.pop(); arr.pop();     // 2 yüksek
-            arr.shift(); arr.shift(); // 2 düşük
-        } else if (arr.length >= 4) {
-            arr.sort((a, b) => a - b);
-            arr.pop();
-            if (arr.length > 2) arr.pop();
-            arr.shift();
-            if (arr.length > 2) arr.shift();
-        }
-        return arr.reduce((a, b) => a + b, 0);
-    }
-
-    let totalDeduction = 0;
-
-    // Her element için per-element trimming
-    // Alan adı: `deductions` (HTML CJP ile uyumlu, eski `scores` değil)
-    for (let elIdx = 0; elIdx < elementCount; elIdx++) {
-        const elDeducts = [];
-        for (let j = 1; j <= 6; j++) {
-            const jData = judgesData[`e${j}`];
-            if (jData) {
-                // `deductions` önce, geriye dönük uyumluluk için `scores` de dene
-                const arr = jData.deductions || jData.scores;
-                if (arr && arr[elIdx] !== undefined) {
-                    elDeducts.push(parseFloat(arr[elIdx]) || 0);
-                }
-            }
-        }
-        totalDeduction += trimDeductions(elDeducts);
-    }
-
-    // Landing trimming
-    const landingArr = [];
-    for (let j = 1; j <= 6; j++) {
-        const jData = judgesData[`e${j}`];
-        if (jData && jData.landing !== undefined && jData.landing !== null && jData.landing !== '') {
-            landingArr.push(parseFloat(jData.landing) || 0);
-        }
-    }
-    totalDeduction += trimDeductions(landingArr);
-
-    return Math.max(0, base - totalDeduction);
-}
-
-// ── Element Deductions Dizisi (Scoreboard timeline için) ─────────────────
-// Her element için 6 hakemden trim edilen geçerli toplam → dizi döner
-function calcElementDeductions(judgesData, elementCount = 10) {
-    const result = [];
-    for (let i = 0; i < elementCount; i++) {
-        let vals = [];
-        for (let j = 1; j <= 6; j++) {
-            const d = judgesData[`e${j}`];
-            if (d?.deductions?.[i] !== undefined) vals.push(parseFloat(d.deductions[i]));
-        }
-        if (vals.length >= 6) {
-            vals.sort((a, b) => a - b); vals.pop(); vals.pop(); vals.shift(); vals.shift();
-        } else if (vals.length >= 4) {
-            vals.sort((a, b) => a - b); vals.pop(); vals.shift();
-        }
-        result.push(parseFloat(vals.reduce((a, b) => a + b, 0).toFixed(3)));
-    }
-    return result;
-}
-
-// ── D Skor (D hakeminden okur — key: 'd', alan: 'val') ───────────────────
-// Not: HTML CJP judges['d'].val formatı. JudgeCockpitPage de 'd' key + val yazar.
-function getDScoreFromJudge(judgesData) {
-    const dJudge = judgesData?.d;
-    if (dJudge && dJudge.val !== undefined && dJudge.val !== '') {
-        return parseFloat(dJudge.val) || 0;
-    }
-    return null; // null = judge verisi yok, manuel giriş kullanılır
-}
 
 export default function CJPPage() {
     const [params] = useSearchParams();
