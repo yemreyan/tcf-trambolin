@@ -312,6 +312,24 @@ export default function ResultsLivePage() {
     // Flash için sync tespiti
     const flashIsSync = flash?.isPair === true || (flash && flash.s > 0 && !flash.t);
 
+    // Flash'taki sporcunun ANLIK sırası. `scores` dinleyicisiyle birlikte
+    // yeniden hesaplanır; yayınlanan puan listeye düştüğü anda sıra güncellenir.
+    // Kimliği olmayan eski kayıtlar için ada göre eşleme yedeği var.
+    const flashRank = useMemo(() => {
+        if (!flash) return null;
+        const cat = flash.categoryId ? categories[flash.categoryId] : null;
+        const cats = cat ? [cat] : Object.values(categories);
+        for (const c of cats) {
+            const rows = computeRanking(c);
+            const hit = rows.find(r =>
+                (flash.athleteId && (r.a.id === flash.athleteId || r.a.uniqueId === flash.athleteId)) ||
+                (!flash.athleteId && getAthleteName(r.a) === flash.athleteName)
+            );
+            if (hit) return { rank: hit.rank, total: rows.filter(x => x.rank != null).length };
+        }
+        return null;
+    }, [flash, categories, athletes, pairs, scores, rules]);
+
     return (
         <div style={{
             minHeight: '100vh',
@@ -582,9 +600,45 @@ export default function ResultsLivePage() {
                             )}
                         </div>
 
-                        {/* Kulüp */}
-                        <div style={{ fontSize: '1.1rem', color: '#64748b', marginBottom: 32 }}>
-                            {flash.club || ''}
+                        {/* Kulüp + anlık sıra */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            gap: 16, marginBottom: 32, flexWrap: 'wrap',
+                        }}>
+                            <span style={{ fontSize: '1.1rem', color: '#A3ACD0' }}>
+                                {flash.club || ''}
+                            </span>
+                            {flashRank?.rank != null && (() => {
+                                const r = flashRank.rank;
+                                const medal = r === 1 ? '#FFD700' : r === 2 ? '#C0C0C0' : r === 3 ? '#CD7F32' : null;
+                                return (
+                                    <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 10,
+                                        background: medal ? `${medal}1F` : 'rgba(124,135,216,0.15)',
+                                        border: `1px solid ${medal ? `${medal}66` : 'rgba(124,135,216,0.4)'}`,
+                                        borderRadius: 10, padding: '6px 16px',
+                                    }}>
+                                        <span style={{
+                                            fontSize: '0.72rem', letterSpacing: 2, fontWeight: 800,
+                                            color: medal || 'var(--accent-secondary)',
+                                        }}>
+                                            SIRA
+                                        </span>
+                                        <span style={{
+                                            fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                                            fontSize: '1.9rem', lineHeight: 1,
+                                            color: medal || 'white',
+                                        }}>
+                                            {r}
+                                        </span>
+                                        {flashRank.total > 0 && (
+                                            <span style={{ fontSize: '0.9rem', color: '#A3ACD0' }}>
+                                                / {flashRank.total}
+                                            </span>
+                                        )}
+                                    </span>
+                                );
+                            })()}
                         </div>
 
                         {/* Puan kutuları — SYNC: D E S H | BİREYSEL: D E T H */}

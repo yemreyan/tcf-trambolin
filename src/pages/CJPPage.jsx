@@ -452,6 +452,10 @@ export default function CJPPage() {
             // Flash ekranına bildir (ResultsLivePage dinler)
             const displayLabel = getAthleteName(selected);
             await set(ref(db, `live/${compId}/scores/current`), {
+                // Canlı sonuç ekranı sporcunun sırasını bulabilsin diye kimlik
+                // ve kategori de yazılır; eskiden yalnızca ad vardı.
+                athleteId: selected.uniqueId,
+                categoryId: selected.catId,
                 athleteName: displayLabel,
                 club: getAthleteClub(selected),
                 d: dVal,
@@ -473,6 +477,8 @@ export default function CJPPage() {
             // Scoreboard için panel-spesifik yola da yaz (scores/current = yalnızca yayınlanan)
             const elDeds = calcElementDeductions(activeJudges, elementCount);
             await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), {
+                athleteId: selected.uniqueId,
+                categoryId: selected.catId,
                 athleteName: displayLabel,
                 club: getAthleteClub(selected),
                 d: dVal,
