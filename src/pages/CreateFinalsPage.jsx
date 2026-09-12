@@ -113,52 +113,52 @@ export default function CreateFinalsPage() {
 
             const orderedAthletes = [...groupA, ...groupB];
 
-            // Yeni kategori yaz
+            const updates = {};
+
+            // Önce finalist ve yedek sporcuları yaz, çıkış sırasını topla
+            const orderIds = [];
+            orderedAthletes.forEach((a, idx) => {
+                const newUid = `${a.id}_final`;
+                updates[`competitions/${compId}/athletes/${newUid}`] = {
+                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
+                    category: finalId, categoryId: finalId, catId: finalId,
+                    isFinalist: true, isReserve: false,
+                    startOrder: idx + 1,
+                };
+                orderIds.push(newUid);
+            });
+            reserves.forEach(({ a }, idx) => {
+                const newUid = `${a.id}_final_res`;
+                updates[`competitions/${compId}/athletes/${newUid}`] = {
+                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
+                    category: finalId, categoryId: finalId, catId: finalId,
+                    isFinalist: true, isReserve: true,
+                    startOrder: 100 + idx,
+                };
+                orderIds.push(newUid);
+            });
+
+            // Kategori nesnesi — startList İÇİNE yazılır.
+            // Ayrı yol olarak yazılamaz: Firebase tek bir update() içinde bir
+            // yolun başka bir yolun üstü olmasına izin vermiyor
+            // (categories/{id} ile categories/{id}/startList çakışır).
+            //
             // startList / athletes üst kategoriden MİRAS ALINMAMALI — aksi halde
             // CJP finalde eleme listesini eleme sırasıyla gösterir.
             const { startList: _ignoredStartList, athletes: _ignoredAthletes, ...catBase } = cat;
-            const finalCat = {
+            updates[`competitions/${compId}/categories/${finalId}`] = {
                 ...catBase,
                 id: finalId,
                 name: `${cat.name} — FİNAL`,
                 isFinal: true,
                 parentCategoryId: catId,
                 createdAt: Date.now(),
+                // CJP startOrder'ı değil startList'i okuyor; shuffle edilmiş
+                // A/B sırası buradan gider.
+                startList: orderIds.map((id, i) => ({ id, order: i + 1 })),
             };
 
-            const updates = {};
-            updates[`competitions/${compId}/categories/${finalId}`] = finalCat;
-
-            // Finalist sporcuları ekle
-            const orderIds = [];
-            orderedAthletes.forEach((a, idx) => {
-                const newUid = `${a.id}_final`;
-                const newAth = {
-                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
-                    category: finalId, categoryId: finalId, catId: finalId,
-                    isFinalist: true, isReserve: false,
-                    startOrder: idx + 1,
-                };
-                updates[`competitions/${compId}/athletes/${newUid}`] = newAth;
-                orderIds.push(newUid);
-            });
-            reserves.forEach(({ a }, idx) => {
-                const newUid = `${a.id}_final_res`;
-                const newAth = {
-                    ...a, id: newUid, uniqueId: newUid, originalId: a.id,
-                    category: finalId, categoryId: finalId, catId: finalId,
-                    isFinalist: true, isReserve: true,
-                    startOrder: 100 + idx,
-                };
-                updates[`competitions/${compId}/athletes/${newUid}`] = newAth;
-                orderIds.push(newUid);
-            });
-
             updates[`competitions/${compId}/startOrder/${finalId}`] = orderIds;
-            // CJP startOrder'ı değil startList'i okuduğu için finali de buraya yaz,
-            // yoksa finalistler shuffle edilmiş A/B sırasıyla değil rastgele sırayla görünür.
-            updates[`competitions/${compId}/categories/${finalId}/startList`] =
-                orderIds.map((id, i) => ({ id, order: i + 1 }));
 
             await update(ref(db), updates);
             toast(`Final oluşturuldu: ${finalists.length} finalist + ${reserves.length} yedek`, 'success');
