@@ -92,6 +92,40 @@ export function standardizeId(rawName, prefix = 'cat') {
     return `${prefix}_${s}`;
 }
 
+// ── Sonuç / Durum Yardımcıları ────────────────────────────────────────────
+/**
+ * Seri DNS veya DNF mi?
+ * CJP büyük harf ('DNS'/'DNF') yayınlar, eski kayıtlarda küçük harf olabilir —
+ * bu yüzden karşılaştırma her zaman normalize edilerek yapılır.
+ */
+export function isDNX(status) {
+    const s = String(status || '').toUpperCase();
+    return s === 'DNS' || s === 'DNF';
+}
+
+/**
+ * Seri puanını ekrana/rapora yazılacak biçimde döndürür.
+ * DNS/DNF ise puan yerine durum etiketi gösterilir.
+ */
+export function formatResultScore(val, status, dash = '—') {
+    if (isDNX(status)) return String(status).toUpperCase();
+    if (val == null) return dash;
+    return Number(val).toFixed(3);
+}
+
+/**
+ * İki seriden geçerli toplamı hesaplar.
+ * DNS/DNF olan seri sıralamaya girmez (null sayılır) — böylece yarışmayan
+ * sporcu 0.000 puanla derece almaz, puansız olarak listenin sonuna düşer.
+ * @param {'sum'|'max'} rule
+ */
+export function computeRoutineTotals(r1d, r2d, rule) {
+    const r1 = isDNX(r1d?.status) ? null : (r1d?.total ?? null);
+    const r2 = isDNX(r2d?.status) ? null : (r2d?.total ?? null);
+    const total = rule === 'max' ? Math.max(r1 || 0, r2 || 0) : (r1 || 0) + (r2 || 0);
+    return { r1, r2, total };
+}
+
 /**
  * Kategorinin puanlama kuralını döndürür: 'sum' | 'max'
  * Büyük / 17+ / senior → 'max' (R1 ve R2'nin maksimumu)
