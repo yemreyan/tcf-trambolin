@@ -317,9 +317,9 @@ function SummaryTab({ data }) {
     }, [data]);
 
     const statCards = [
-        { label: 'Sporcu', value: stats.uniqueAthletes, icon: 'person', color: '#38bdf8' },
-        { label: 'Seri', value: stats.routines, icon: 'repeat', color: '#38bdf8' },
-        { label: 'Ort. E Skoru', value: stats.avgE.toFixed(2), icon: 'speed', color: '#38bdf8' },
+        { label: 'Sporcu', value: stats.uniqueAthletes, icon: 'person', color: '#7C87D8' },
+        { label: 'Seri', value: stats.routines, icon: 'repeat', color: '#7C87D8' },
+        { label: 'Ort. E Skoru', value: stats.avgE.toFixed(2), icon: 'speed', color: '#7C87D8' },
         { label: 'Tutarlılık', value: stats.consistency.toFixed(0) + '%', icon: 'verified', color: stats.consistency > 85 ? '#22c55e' : stats.consistency > 70 ? '#f59e0b' : '#ef4444' },
         { label: 'Maks. Sapma', value: stats.maxDev.toFixed(2), icon: 'warning', color: stats.maxDev < 0.2 ? '#22c55e' : stats.maxDev < 0.4 ? '#f59e0b' : '#ef4444' },
         { label: 'Aykırı Karar', value: stats.outliers, icon: 'error_outline', color: stats.outliers === 0 ? '#22c55e' : stats.outliers < 5 ? '#f59e0b' : '#ef4444' },
@@ -435,7 +435,7 @@ function JudgesTab({ data }) {
                             }}>{jc.badge.text}</span>
                         )}
                     </div>
-                    <div style={{ fontSize: '2.2rem', fontWeight: 800, color: jc.key === 'd' ? '#fbbf24' : '#38bdf8', marginBottom: 4 }}>
+                    <div style={{ fontSize: '2.2rem', fontWeight: 800, color: jc.key === 'd' ? '#fbbf24' : '#7C87D8', marginBottom: 4 }}>
                         {jc.avg.toFixed(2)}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 14 }}>
@@ -611,7 +611,7 @@ function ClubsTab({ data }) {
                     <div style={{ flex: 1, height: 28, background: 'rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
                         <div style={{
                             width: `${c.pct}%`, height: '100%', borderRadius: 6,
-                            background: 'linear-gradient(90deg, #38bdf8, #818cf8)',
+                            background: 'linear-gradient(90deg, #7C87D8, #818cf8)',
                             display: 'flex', alignItems: 'center', paddingLeft: 10,
                             fontSize: '0.82rem', fontWeight: 700, color: '#000',
                             transition: 'width 0.5s ease',

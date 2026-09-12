@@ -18,7 +18,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 
 const ROLES = [
-    { id: 'cjp', name: 'Başhakem (CJP)', icon: 'stars', color: '#f43f5e' },
+    { id: 'cjp', name: 'Başhakem (CJP)', icon: 'stars', color: '#E02828' },
     { id: 'd',   name: 'Zorluk Hakemi (D)', icon: 'speed', color: '#fbbf24' },
     { id: 'e1',  name: 'İcra Hakemi E1', icon: 'person', color: '#3b82f6' },
     { id: 'e2',  name: 'İcra Hakemi E2', icon: 'person', color: '#3b82f6' },
@@ -152,9 +152,9 @@ export default function PasswordAdminPage() {
                 }}>
                     <div style={{
                         width: 80, height: 80,
-                        background: 'linear-gradient(135deg,#f43f5e 0%,#be123c 100%)',
+                        background: 'linear-gradient(135deg,#E02828 0%,#A01C1C 100%)',
                         borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 25px', boxShadow: '0 0 40px rgba(244,63,94,0.3)',
+                        margin: '0 auto 25px', boxShadow: '0 0 40px rgba(224,40,40,0.3)',
                     }}>
                         <i className="material-icons-round" style={{ fontSize: 40, color: 'white' }}>admin_panel_settings</i>
                     </div>
@@ -238,7 +238,7 @@ export default function PasswordAdminPage() {
                 </div>
 
                 {/* Admin Password Section */}
-                <PanelCard title="Admin Şifresi" icon="admin_panel_settings" iconColor="#f43f5e">
+                <PanelCard title="Admin Şifresi" icon="admin_panel_settings" iconColor="#E02828">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
                         <PasswordField
                             label="Admin"
@@ -352,7 +352,7 @@ function PasswordField({ label, labelIcon, labelColor = '#94a3b8', value, onChan
                     style={{
                         flex: 1, background: 'rgba(0,0,0,0.3)',
                         border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
-                        padding: '12px 16px', color: '#38bdf8',
+                        padding: '12px 16px', color: '#7C87D8',
                         fontFamily: "'Courier New', monospace",
                         fontSize: '1.1rem', letterSpacing: 3, fontWeight: 700,
                         outline: 'none',

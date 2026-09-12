@@ -143,11 +143,11 @@ export default function SuperiorJuryPage() {
 
                     {/* ── SOL: Sporcu bilgileri ──────────────────────── */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <Card title="SAHADAKİ SPORCU" accent="#38bdf8">
+                        <Card title="SAHADAKİ SPORCU" accent="#7C87D8">
                             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
                                 {displayName || '—'}
                             </div>
-                            <div style={{ color: '#38bdf8', fontWeight: 600, marginTop: 4 }}>
+                            <div style={{ color: '#7C87D8', fontWeight: 600, marginTop: 4 }}>
                                 {getAthleteClub(fullAthlete || onField) || '—'}
                             </div>
                             {isSync && (
@@ -226,7 +226,7 @@ export default function SuperiorJuryPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
                         {/* Anlık skor kutuları */}
-                        <Card title="ANLIK PUAN" accent="#f43f5e">
+                        <Card title="ANLIK PUAN" accent="#E02828">
                             {livePreview?.status && (
                                 <div style={{
                                     background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
@@ -432,8 +432,8 @@ function Stat({ label, value, big, neg, accent }) {
 function Chip({ label, value }) {
     return (
         <div style={{
-            background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.25)',
-            color: '#38bdf8', padding: '4px 12px', borderRadius: 6,
+            background: 'rgba(124,135,216,0.12)', border: '1px solid rgba(124,135,216,0.25)',
+            color: '#7C87D8', padding: '4px 12px', borderRadius: 6,
             fontSize: '0.78rem', fontWeight: 700, whiteSpace: 'nowrap',
         }}>
             {label} <strong style={{ color: '#fff' }}>{value}</strong>

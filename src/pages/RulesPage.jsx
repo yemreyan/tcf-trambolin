@@ -138,7 +138,7 @@ export default function RulesPage() {
                 <Section
                     title="Puanlama Formülü ve Eleme"
                     icon="calculate"
-                    accent="#f43f5e"
+                    accent="#E02828"
                     warn="Bu alanlar puan hesabını doğrudan değiştirir."
                 >
                     <NumField g="scoring" k="eJudgeCount" label="E hakem sayısı"
@@ -320,7 +320,7 @@ function Section({ title, icon, accent, warn, children }) {
             <div className="card-body">
                 {warn && (
                     <div style={{
-                        background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.3)',
+                        background: 'rgba(224,40,40,0.1)', border: '1px solid rgba(224,40,40,0.3)',
                         color: '#fca5a5', borderRadius: 8, padding: '8px 12px',
                         fontSize: '0.8rem', marginBottom: 14,
                     }}>

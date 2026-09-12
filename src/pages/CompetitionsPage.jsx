@@ -222,10 +222,10 @@ function CompItem({ comp, onClick }) {
             style={{
                 padding: 16,
                 border: '1px solid',
-                borderColor: hover ? 'rgba(56,189,248,0.4)' : 'rgba(255,255,255,0.08)',
+                borderColor: hover ? 'rgba(124,135,216,0.4)' : 'rgba(255,255,255,0.08)',
                 borderRadius: 12,
                 cursor: 'pointer',
-                background: hover ? 'rgba(56,189,248,0.04)' : 'transparent',
+                background: hover ? 'rgba(124,135,216,0.04)' : 'transparent',
                 transition: 'all 0.2s',
             }}
         >

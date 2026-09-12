@@ -54,8 +54,8 @@ export default function PasswordGate({ compId, panel, role, onUnlock, label, ver
                 </div>
                 {label && (
                     <div style={{
-                        background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)',
-                        borderRadius: 8, padding: '6px 14px', fontSize: '0.82rem', color: '#38bdf8',
+                        background: 'rgba(124,135,216,0.1)', border: '1px solid rgba(124,135,216,0.2)',
+                        borderRadius: 8, padding: '6px 14px', fontSize: '0.82rem', color: '#7C87D8',
                         fontWeight: 700, letterSpacing: 1, marginBottom: 24, display: 'inline-block',
                     }}>
                         {label}

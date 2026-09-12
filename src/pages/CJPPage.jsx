@@ -665,7 +665,7 @@ export default function CJPPage() {
                         let statusText = 'BEKLİYOR';
                         if (r1Done && r2Done) { statusColor = '#22c55e'; statusText = 'TAMAMLANDI'; }
                         else if (r1Done || r2Done) { statusColor = '#eab308'; statusText = r1Done ? '1.SERİ✓' : '2.SERİ✓'; }
-                        if (isOnField) { statusColor = '#38bdf8'; statusText = 'TRAMPOLİNDE'; }
+                        if (isOnField) { statusColor = '#7C87D8'; statusText = 'TRAMPOLİNDE'; }
 
                         return (
                             <div
@@ -674,8 +674,8 @@ export default function CJPPage() {
                                 style={{
                                     padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
                                     marginBottom: 4, transition: 'all 0.15s',
-                                    background: isSelected ? 'rgba(56,189,248,0.12)' : isOnField ? 'rgba(16,185,129,0.08)' : 'transparent',
-                                    border: `1px solid ${isSelected ? 'rgba(56,189,248,0.3)' : isOnField ? 'rgba(16,185,129,0.3)' : 'transparent'}`,
+                                    background: isSelected ? 'rgba(124,135,216,0.12)' : isOnField ? 'rgba(16,185,129,0.08)' : 'transparent',
+                                    border: `1px solid ${isSelected ? 'rgba(124,135,216,0.3)' : isOnField ? 'rgba(16,185,129,0.3)' : 'transparent'}`,
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -733,7 +733,7 @@ export default function CJPPage() {
                                             border: 'none', padding: '6px 14px', borderRadius: 8,
                                             fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
                                             background: activeRoutine === r
-                                                ? (r === 1 ? '#fbbf24' : '#38bdf8')
+                                                ? (r === 1 ? '#fbbf24' : '#7C87D8')
                                                 : 'transparent',
                                             color: activeRoutine === r ? '#000' : athRes[`r${r}`] ? '#10b981' : 'rgba(255,255,255,0.4)',
                                             transition: 'all 0.2s',
@@ -842,7 +842,7 @@ export default function CJPPage() {
                         )}
 
                         {/* T kartı: Bireysel'de aktif, Sync'te devre dışı */}
-                        <HudCard label="TIME (T)" accent="#38bdf8"
+                        <HudCard label="TIME (T)" accent="#7C87D8"
                             style={isSync ? { opacity: 0.3, pointerEvents: 'none' } : {}}>
                             <input
                                 className="hud-input"
@@ -918,7 +918,7 @@ export default function CJPPage() {
                             )}
                         </HudCard>
 
-                        <HudCard label="PENALTY (P)" accent="#f43f5e">
+                        <HudCard label="PENALTY (P)" accent="#E02828">
                             <input
                                 className="hud-input"
                                 type="number"
@@ -926,7 +926,7 @@ export default function CJPPage() {
                                 value={inpP}
                                 onChange={e => { setInpP(e.target.value); saveDraft(); }}
                                 placeholder="0.0"
-                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(244,63,94,0.3)', color: '#f43f5e' }}
+                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(224,40,40,0.3)', color: '#E02828' }}
                             />
                         </HudCard>
 

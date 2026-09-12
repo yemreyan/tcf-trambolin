@@ -530,7 +530,7 @@ export default function JudgeCockpitPage() {
                         style={{
                             width: '100%', padding: 'clamp(10px, 2vh, 18px)',
                             borderRadius: 12, border: 'none',
-                            background: submitted ? '#10b981' : 'var(--accent-primary, #F43F5E)',
+                            background: submitted ? '#10b981' : 'var(--accent-primary, #E02828)',
                             color: 'white', fontSize: 'clamp(0.9rem, 2vw, 1.15rem)',
                             fontWeight: 800, letterSpacing: 2,
                             fontFamily: "'Outfit', sans-serif",
@@ -705,7 +705,7 @@ export default function JudgeCockpitPage() {
                     style={{
                         width: '100%', padding: 'clamp(10px, 2vh, 18px)',
                         borderRadius: 12, border: 'none',
-                        background: submitted ? '#10b981' : 'var(--accent-primary, #F43F5E)',
+                        background: submitted ? '#10b981' : 'var(--accent-primary, #E02828)',
                         color: 'white',
                         fontSize: 'clamp(0.9rem, 2vw, 1.15rem)',
                         fontWeight: 800, letterSpacing: 2,

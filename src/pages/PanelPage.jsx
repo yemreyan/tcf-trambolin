@@ -155,7 +155,7 @@ export default function PanelPage() {
                     <MenuCard
                         icon="vpn_key" title="Şifre Yönetimi" desc="Hakem şifrelerini yönet"
                         onClick={() => navigate('/password-admin')}
-                        accentColor="#f43f5e"
+                        accentColor="#E02828"
                     />
 
                     <MenuCard
@@ -253,7 +253,7 @@ export default function PanelPage() {
                                     <h5 style={{ color: '#94a3b8', marginBottom: 10, fontSize: '0.8rem', letterSpacing: 1 }}>BAŞHAKEM (CJP)</h5>
                                     <button
                                         className="btn w-100"
-                                        style={{ background: 'linear-gradient(135deg, #f43f5e, #be123c)', color: 'white', marginBottom: 10 }}
+                                        style={{ background: 'linear-gradient(135deg, #E02828, #A01C1C)', color: 'white', marginBottom: 10 }}
                                         onClick={openCJP}
                                     >
                                         <i className="material-icons-round">stars</i> BAŞHAKEM PANELİ
@@ -283,7 +283,7 @@ function MenuCard({ icon, title, desc, onClick, accentColor }) {
     const [hover, setHover] = useState(false);
     const iconBg = accentColor
         ? `${accentColor}22`
-        : 'rgba(56,189,248,0.1)';
+        : 'rgba(124,135,216,0.1)';
     const iconColor = accentColor || 'var(--accent-secondary)';
 
     return (

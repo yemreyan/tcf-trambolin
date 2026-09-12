@@ -754,7 +754,7 @@ export default function ResultsFinalPage() {
                                                         <div style={{
                                                             fontFamily: "'Space Mono',monospace",
                                                             fontSize: '1.2rem', fontWeight: 700,
-                                                            color: medalC || '#38bdf8',
+                                                            color: medalC || '#7C87D8',
                                                         }}>
                                                             {row.total > 0 ? row.total.toFixed(3) : (row.r1 != null || row.r2 != null ? row.total.toFixed(3) : '-')}
                                                         </div>
@@ -770,22 +770,6 @@ export default function ResultsFinalPage() {
                         {/* ── TAKIM SIRALAMASI ──────────────────────────── */}
                         {currentCat && activeTab === 'team' && (
                             <div>
-                                {/* Hangi yöntemle hesaplandığı açıkça yazılsın */}
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                                    background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)',
-                                    borderRadius: 10, padding: '8px 14px', marginBottom: 14,
-                                    fontSize: '0.8rem', color: '#94a3b8',
-                                }}>
-                                    <i className="material-icons-round" style={{ fontSize: 16, color: '#38bdf8' }}>info</i>
-                                    {teamRanking[0]?.perRoutine
-                                        ? <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>her serinin en iyi {rules.flow.teamTopN} puanı</strong> toplanarak hesaplanır.</span>
-                                        : catRules.scoringRule === 'max'
-                                            ? <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>en iyi {rules.flow.teamTopN} sporcunun geçerli serisi</strong> toplanarak hesaplanır.</span>
-                                            : <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>en iyi {rules.flow.teamTopN} sporcunun iki serisi</strong> toplanarak hesaplanır.</span>}
-                                    <span style={{ opacity: 0.7 }}>· Takım için en az {catRules.teamMinAthletes} sporcu</span>
-                                </div>
-
                                 {teamRanking.length === 0 && (
                                     <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
                                         Takım oluşturacak kadar sporcusu olan kulüp yok.
@@ -834,7 +818,7 @@ export default function ResultsFinalPage() {
                                                         </div>
                                                         <div style={{
                                                             fontFamily: "'Space Mono',monospace", fontSize: '1.5rem',
-                                                            fontWeight: 700, color: medal || '#38bdf8', lineHeight: 1.1,
+                                                            fontWeight: 700, color: medal || 'var(--accent-secondary)', lineHeight: 1.1,
                                                         }}>
                                                             {t.teamTotal.toFixed(3)}
                                                         </div>
@@ -848,14 +832,14 @@ export default function ResultsFinalPage() {
                                                     gap: 1, background: 'rgba(255,255,255,0.06)',
                                                 }}>
                                                     {t.routines.map(rt => (
-                                                        <div key={rt.key} style={{ background: '#0f172a', padding: '12px 18px' }}>
+                                                        <div key={rt.key} style={{ background: 'rgba(10,14,32,0.55)', padding: '12px 18px' }}>
                                                             <div style={{
                                                                 display: 'flex', justifyContent: 'space-between',
                                                                 alignItems: 'baseline', marginBottom: 8,
                                                             }}>
                                                                 <span style={{
                                                                     fontSize: '0.7rem', fontWeight: 800, letterSpacing: 1.2,
-                                                                    color: rt.key === 'r1' ? '#fbbf24' : '#38bdf8',
+                                                                    color: rt.key === 'r1' ? 'var(--accent-primary)' : 'var(--accent-secondary)',
                                                                 }}>
                                                                     {rt.label.toUpperCase()}
                                                                 </span>

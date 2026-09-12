@@ -231,7 +231,7 @@ export default function CategoriesPage() {
                             </div>
 
                             <div style={{
-                                background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.2)',
+                                background: 'rgba(124,135,216,0.05)', border: '1px solid rgba(124,135,216,0.2)',
                                 borderRadius: 8, padding: 12, fontSize: '0.82rem', color: '#94a3b8', marginBottom: 20,
                             }}>
                                 <i className="material-icons-round" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 6 }}>info</i>

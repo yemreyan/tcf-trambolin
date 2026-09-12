@@ -161,9 +161,9 @@ export default function ScoreboardPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     {/* Panel göstergesi */}
                     <div style={{
-                        background: 'rgba(56,189,248,0.12)', color: '#38bdf8',
+                        background: 'rgba(124,135,216,0.12)', color: '#7C87D8',
                         padding: '4px 14px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 700,
-                        border: '1px solid rgba(56,189,248,0.25)',
+                        border: '1px solid rgba(124,135,216,0.25)',
                     }}>
                         PANEL {panel}
                     </div>
@@ -249,7 +249,7 @@ export default function ScoreboardPage() {
 
                             {/* Kulüp */}
                             <div style={{
-                                fontSize: '1.5rem', color: '#38BDF8', fontWeight: 600,
+                                fontSize: '1.5rem', color: '#7C87D8', fontWeight: 600,
                                 zIndex: 1,
                             }}>
                                 {athlete.club || ''}
@@ -293,7 +293,7 @@ export default function ScoreboardPage() {
                                 <ScoreBox label="E" value={result.e?.toFixed(2)} accent="#10b981" />
                                 {isSync
                                     ? <ScoreBox label="S" value={result.sRaw != null ? result.sRaw.toFixed(2) : result.s?.toFixed(2)} accent="#c084fc" sublabel="×2" />
-                                    : <ScoreBox label="T" value={result.t?.toFixed(3)} accent="#38bdf8" />
+                                    : <ScoreBox label="T" value={result.t?.toFixed(3)} accent="#7C87D8" />
                                 }
                                 {showH1H2 ? (
                                     <ScoreBoxDouble label="H" v1={h1Val?.toFixed(2)} v2={h2Val?.toFixed(2)} accent="#a855f7" />
@@ -332,13 +332,13 @@ export default function ScoreboardPage() {
                             <div style={{
                                 flex: 1,
                                 background: scoreReveal
-                                    ? 'rgba(56,189,248,0.12)'
+                                    ? 'rgba(124,135,216,0.12)'
                                     : 'rgba(255,255,255,0.04)',
-                                border: `1px solid ${scoreReveal ? 'rgba(56,189,248,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                                border: `1px solid ${scoreReveal ? 'rgba(124,135,216,0.4)' : 'rgba(255,255,255,0.08)'}`,
                                 borderRadius: 20, padding: '24px 36px',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 transition: 'background 0.4s, border-color 0.4s',
-                                boxShadow: scoreReveal ? '0 0 40px rgba(56,189,248,0.2)' : 'none',
+                                boxShadow: scoreReveal ? '0 0 40px rgba(124,135,216,0.2)' : 'none',
                             }}>
                                 <div>
                                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>
@@ -354,8 +354,8 @@ export default function ScoreboardPage() {
                                     fontFamily: "'Space Mono', monospace",
                                     fontSize: '5.5rem', fontWeight: 900, color: 'white',
                                     textShadow: scoreReveal
-                                        ? '0 0 60px rgba(56,189,248,0.7)'
-                                        : '0 0 30px rgba(56,189,248,0.2)',
+                                        ? '0 0 60px rgba(124,135,216,0.7)'
+                                        : '0 0 30px rgba(124,135,216,0.2)',
                                     transition: 'text-shadow 0.4s',
                                     letterSpacing: -2,
                                 }}>

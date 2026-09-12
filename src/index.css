@@ -6,32 +6,40 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-    --bg-dark: #0f172a;
-    --bg-darker: #020617;
+    /* ── TCF kurumsal palet ───────────────────────────────────────────
+       Logodan örneklendi: lacivert #303868, kırmızı #E02828.
+       Koyu arayüzde lacivert zemin olarak, kırmızı vurgu olarak kullanılır;
+       lacivertin açık tonu (periwinkle) okunabilir ikincil vurgudur.       */
+    --tcf-navy: #303868;
+    --tcf-navy-light: #7C87D8;
+    --tcf-red: #E02828;
 
-    --accent: #F43F5E;
-    --accent-primary: #F43F5E;
-    --accent-secondary: #38BDF8;
+    --bg-dark: #141A35;
+    --bg-darker: #0A0E20;
+
+    --accent: #E02828;
+    --accent-primary: #E02828;
+    --accent-secondary: #7C87D8;
     --accent-tertiary: #A855F7;
     --accent-success: #10b981;
 
-    --glass-bg: rgba(30, 41, 59, 0.65);
-    --glass-surface: rgba(30, 41, 59, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-bg: rgba(48, 56, 104, 0.42);
+    --glass-surface: rgba(48, 56, 104, 0.42);
+    --glass-border: rgba(255, 255, 255, 0.09);
     --glass-shine: rgba(255, 255, 255, 0.03);
 
     --text-main: #F8FAFC;
-    --text-muted: #94A3B8;
+    --text-muted: #A3ACD0;
     --text-dark: #1e293b;
     --border-color: rgba(255,255,255,0.1);
 
-    --primary: #F43F5E;
+    --primary: #E02828;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
 
-    --glow-primary: 0 0 20px rgba(244,63,94,0.25);
-    --glow-secondary: 0 0 20px rgba(56,189,248,0.25);
+    --glow-primary: 0 0 20px rgba(224,40,40,0.28);
+    --glow-secondary: 0 0 20px rgba(124,135,216,0.25);
     --glow-success: 0 0 20px rgba(16,185,129,0.25);
 
     --radius-md: 14px;
@@ -51,7 +59,7 @@ html, body, #root {
 
 body {
     font-family: 'Outfit', sans-serif;
-    background: radial-gradient(circle at top right, #1e1b4b 0%, #0f172a 40%, #020617 100%);
+    background: radial-gradient(circle at top right, #2A3163 0%, #141A35 45%, #0A0E20 100%);
     background-attachment: fixed;
     color: var(--text-main);
     display: flex;
@@ -241,7 +249,7 @@ a { text-decoration: none; }
 }
 
 .form-group select option {
-    background: #0f172a;
+    background: var(--bg-dark);
     color: white;
 }
 
@@ -449,7 +457,7 @@ a { text-decoration: none; }
 
 .accent-e { color: #10b981 !important; }
 .accent-d { color: #f59e0b !important; }
-.accent-t { color: #38bdf8 !important; }
+.accent-t { color: var(--accent-secondary) !important; }
 .accent-h { color: #a855f7 !important; }
 
 .hud-total-display {
@@ -571,7 +579,7 @@ a { text-decoration: none; }
 .gate-overlay {
     position: fixed;
     inset: 0;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background: linear-gradient(135deg, #141A35 0%, #262E5C 100%);
     z-index: 10000;
     display: flex;
     align-items: center;

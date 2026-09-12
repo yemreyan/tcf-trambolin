@@ -17,7 +17,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 
 const ROLES = [
-    { id: 'cjp', name: 'CJP', color: '#f43f5e' },
+    { id: 'cjp', name: 'CJP', color: '#E02828' },
     // Tek zorluk hakemi. Anahtar 'd1' olarak korundu (mevcut kayıtlar bozulmasın),
     // hakem ekranı ve şifre ekranı ise tek 'd' hakemi varsayıyor.
     { id: 'd1',  name: 'D',   color: '#fbbf24' },
@@ -208,8 +208,8 @@ export default function JuryPage() {
                             return (
                                 <div key={p.id} onClick={() => selectPanel(p.id)} style={{
                                     padding: 12, margin: '4px 0', borderRadius: 10, cursor: 'pointer',
-                                    background: isActive ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.03)',
-                                    border: `1px solid ${isActive ? 'var(--accent-primary,#F43F5E)' : 'rgba(255,255,255,0.05)'}`,
+                                    background: isActive ? 'rgba(224,40,40,0.15)' : 'rgba(255,255,255,0.03)',
+                                    border: `1px solid ${isActive ? 'var(--accent-primary,#E02828)' : 'rgba(255,255,255,0.05)'}`,
                                     transition: 'all 0.2s',
                                 }}>
                                     <div style={{ fontWeight: 700 }}>{p.name}</div>
@@ -298,9 +298,9 @@ export default function JuryPage() {
                                     {Object.values(categories).map(c => (
                                         <div key={c.id} style={{
                                             background: c.juryPanelId === activePanelId
-                                                ? 'rgba(244,63,94,0.1)' : 'rgba(255,255,255,0.03)',
+                                                ? 'rgba(224,40,40,0.1)' : 'rgba(255,255,255,0.03)',
                                             border: `1px solid ${c.juryPanelId === activePanelId
-                                                ? 'var(--accent-primary,#F43F5E)' : 'rgba(255,255,255,0.06)'}`,
+                                                ? 'var(--accent-primary,#E02828)' : 'rgba(255,255,255,0.06)'}`,
                                             borderRadius: 10, padding: 12,
                                         }}>
                                             <div style={{ fontWeight: 700, marginBottom: 6 }}>{c.name}</div>

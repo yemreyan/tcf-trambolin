@@ -193,7 +193,7 @@ export default function AdminToolsPage() {
                         return (
                             <div key={c.id} className="card" style={{
                                 opacity: archived ? 0.7 : 1,
-                                borderLeft: `4px solid ${archived ? '#64748b' : 'var(--accent-primary,#F43F5E)'}`,
+                                borderLeft: `4px solid ${archived ? '#64748b' : 'var(--accent-primary,#E02828)'}`,
                             }}>
                                 <div className="card-body">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

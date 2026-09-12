@@ -582,15 +582,15 @@ export default function RegistrationPage() {
                     {/* Filtredeki tümünü seç */}
                     {filterCat && displayedAthletes.length > 0 && selectedIds.size === 0 && (
                         <div style={{
-                            padding: '8px 16px', background: 'rgba(56,189,248,0.06)',
-                            borderBottom: '1px solid rgba(56,189,248,0.15)',
+                            padding: '8px 16px', background: 'rgba(124,135,216,0.06)',
+                            borderBottom: '1px solid rgba(124,135,216,0.15)',
                             display: 'flex', alignItems: 'center', gap: 10,
                         }}>
-                            <i className="material-icons-round" style={{ fontSize: 16, color: '#38bdf8' }}>info</i>
+                            <i className="material-icons-round" style={{ fontSize: 16, color: '#7C87D8' }}>info</i>
                             <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
                                 {displayedAthletes.length} sporcu gösteriliyor
                             </span>
-                            <button className="btn btn-sm btn-outline" style={{ fontSize: '0.78rem', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.4)' }}
+                            <button className="btn btn-sm btn-outline" style={{ fontSize: '0.78rem', color: '#7C87D8', borderColor: 'rgba(124,135,216,0.4)' }}
                                 onClick={() => toggleAll(true)}>
                                 <i className="material-icons-round" style={{ fontSize: 14 }}>select_all</i> Tümünü Seç ({displayedAthletes.length})
                             </button>
@@ -604,7 +604,7 @@ export default function RegistrationPage() {
                             background: 'rgba(0,86,210,0.15)', border: '1px solid rgba(0,86,210,0.4)',
                             borderRadius: 10,
                         }}>
-                            <span style={{ color: 'var(--accent-primary, #F43F5E)', fontWeight: 600, fontSize: '0.9rem' }}>
+                            <span style={{ color: 'var(--accent-primary, #E02828)', fontWeight: 600, fontSize: '0.9rem' }}>
                                 {selectedIds.size} sporcu seçili
                             </span>
                             <select value={bulkCatId} onChange={e => setBulkCatId(e.target.value)} style={{ flex: 1, maxWidth: 260 }}>

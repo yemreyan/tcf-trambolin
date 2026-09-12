@@ -320,7 +320,7 @@ export default function ResultsLivePage() {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {currentView && (
                         <div style={{
-                            background: 'rgba(244,63,94,0.15)', color: '#f43f5e',
+                            background: 'rgba(224,40,40,0.15)', color: '#E02828',
                             padding: '4px 12px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 700,
                         }}>
                             {currentView.cat.type === 'sync' && (
@@ -440,7 +440,7 @@ export default function ResultsLivePage() {
                                 fontFamily: "'Space Mono',monospace",
                                 fontSize: '2rem', fontWeight: 900,
                                 textAlign: 'right',
-                                color: medal ? rankColor : '#38bdf8',
+                                color: medal ? rankColor : '#7C87D8',
                             }}>
                                 {(() => {
                                     // Her iki seri de DNS/DNF ise toplam gösterme
@@ -479,9 +479,9 @@ export default function ResultsLivePage() {
                     <div style={{
                         background: 'radial-gradient(circle at 30% 30%, #1e293b, #020617)',
                         padding: '50px 60px', borderRadius: 24, textAlign: 'center',
-                        border: `2px solid ${flashIsSync ? '#c084fc' : '#38bdf8'}`,
+                        border: `2px solid ${flashIsSync ? '#c084fc' : '#7C87D8'}`,
                         minWidth: 620, maxWidth: '90vw',
-                        boxShadow: `0 0 80px ${flashIsSync ? 'rgba(192,132,252,0.4)' : 'rgba(56,189,248,0.5)'}`,
+                        boxShadow: `0 0 80px ${flashIsSync ? 'rgba(192,132,252,0.4)' : 'rgba(124,135,216,0.5)'}`,
                     }}>
                         {/* Etiket */}
                         <div style={{ fontSize: '0.85rem', color: '#64748b', letterSpacing: 3, marginBottom: 16, textTransform: 'uppercase' }}>
@@ -528,7 +528,7 @@ export default function ResultsLivePage() {
                                     sublabel="×2" />
                                 : <MiniScore label="T"
                                     value={flash.t?.toFixed(3)}
-                                    color="#38bdf8" />
+                                    color="#7C87D8" />
                             }
                             <MiniScore label="H"
                                 value={flash.h?.toFixed(2)}
@@ -539,8 +539,8 @@ export default function ResultsLivePage() {
                         <div style={{
                             fontFamily: "'Space Mono',monospace",
                             fontSize: '5.5rem', fontWeight: 900,
-                            color: flashIsSync ? '#c084fc' : '#38bdf8',
-                            textShadow: `0 0 50px ${flashIsSync ? 'rgba(192,132,252,0.6)' : 'rgba(56,189,248,0.6)'}`,
+                            color: flashIsSync ? '#c084fc' : '#7C87D8',
+                            textShadow: `0 0 50px ${flashIsSync ? 'rgba(192,132,252,0.6)' : 'rgba(124,135,216,0.6)'}`,
                             lineHeight: 1,
                         }}>
                             {flash.total?.toFixed(3)}

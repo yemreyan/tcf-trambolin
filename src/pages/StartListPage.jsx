@@ -311,7 +311,7 @@ export default function StartListPage() {
     margin-bottom: 14px;
   }
   .tcf-badge {
-    background: #38bdf8; color: #0f172a;
+    background: #7C87D8; color: #0f172a;
     font-weight: 900; font-size: 13pt;
     width: 40px; height: 40px; border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
@@ -334,7 +334,7 @@ export default function StartListPage() {
     background: #1e293b; color: white;
     padding: 6px 10px; border-radius: 4px 4px 0 0;
   }
-  .cat-name  { font-weight: 700; font-size: 10.5pt; color: #38bdf8; letter-spacing: 0.5px; }
+  .cat-name  { font-weight: 700; font-size: 10.5pt; color: #7C87D8; letter-spacing: 0.5px; }
   .cat-count { font-size: 8pt; color: #94a3b8; }
 
   /* ── Tablo ── */
