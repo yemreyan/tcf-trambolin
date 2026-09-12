@@ -485,10 +485,16 @@ export function computeTeamRanking(rows, o = {}) {
         byClub[club].push(row);
     });
 
+    // Takım eşiğine YALNIZCA puan almış sporcular sayılır. Kayıtlı olup
+    // yarışmayan sporcu takımı oluşturmaz; eskiden kadroya sayıldığı için
+    // 2 puanlı kulüp "3 sporcu" görünüp takım listesine giriyordu.
+    const scoredOf = (rs) => rs.filter(r => r.r1 != null || r.r2 != null);
+
     const teams = Object.entries(byClub)
-        // Yeterli sporcusu olmayan kulüp takım değildir
-        .filter(([, rs]) => rs.length >= minAthletes)
-        .map(([club, rs]) => {
+        .filter(([, rs]) => scoredOf(rs).length >= minAthletes)
+        .map(([club, all]) => {
+            // Hesap ve gösterim yalnızca puanlı sporcular üzerinden
+            const rs = scoredOf(all);
             const byTotal = [...rs].sort((a, b) => b.total - a.total);
 
             const perRoutine =

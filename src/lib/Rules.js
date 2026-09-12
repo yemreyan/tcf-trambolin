@@ -48,6 +48,15 @@ export const DEFAULT_RULES = {
         // Bir kulübün takım sayılabilmesi için gereken en az sporcu.
         // Altında kalan kulüpler takım listesinde HİÇ görünmez.
         teamMinAthletes: 3,
+        // Bazı yaş kategorilerinde takım daha az sporcuyla kurulur.
+        // Kategori adında anahtar kelime geçiyorsa ve kategori SENKRON
+        // DEĞİLSE bu eşik uygulanır. Kategoride açık ayar varsa o kazanır.
+        teamMinByKeyword: [
+            { keyword: 'genç',  min: 2 },
+            { keyword: 'genc',  min: 2 },
+            { keyword: 'büyük', min: 2 },
+            { keyword: 'buyuk', min: 2 },
+        ],
         // Takım puanı nasıl hesaplanır:
         //  'athleteTotal' → en iyi N sporcunun GENEL toplamı (mevcut davranış)
         //  'perRoutine'   → her serinin en iyi N puanı ayrı ayrı toplanır
@@ -152,11 +161,26 @@ export function resolveCategoryRules(rules, category) {
         hasTeam:      pick('hasTeam', flow.hasTeam) !== false,
         teamMode:     pick('teamMode', flow.teamMode),
         teamMinAthletes:
-            Number(pick('teamMinAthletes', flow.teamMinAthletes)) || flow.teamMinAthletes,
+            Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes,
         teamPerRoutineMinAthletes:
             Number(pick('teamPerRoutineMinAthletes', flow.teamPerRoutineMinAthletes))
             || flow.teamPerRoutineMinAthletes,
     };
+}
+
+/**
+ * Takım için gereken en az sporcu sayısı — kategori adına göre.
+ * Senkron kategorilerde anahtar kelime uygulanmaz; genel eşik geçerlidir.
+ */
+function resolveTeamMin(category, flow) {
+    const base = Number(flow.teamMinAthletes) || 3;
+    if (!category || category.type === 'sync') return base;
+    const name = String(category.name || '').toLowerCase();
+    for (const rule of (flow.teamMinByKeyword || [])) {
+        const k = String(rule?.keyword || '').toLowerCase();
+        if (k && name.includes(k)) return Number(rule.min) || base;
+    }
+    return base;
 }
 
 /** Kategori adındaki anahtar kelimelere göre sum/max kararı (eski davranış). */

@@ -199,6 +199,9 @@ export default function RulesPage() {
                     <NumField g="flow" k="teamMinAthletes" label="Takım için en az sporcu"
                         hint="Kulüpte bu kadar sporcu yoksa takım listesine hiç girmez"
                         min={1} max={10} step={1} draft={draft} set={set} />
+                    <KeywordMinField g="flow" k="teamMinByKeyword" label="Kategoriye göre takım eşiği"
+                        hint="Kategori adında anahtar kelime geçiyorsa bu eşik uygulanır (senkron kategorilerde uygulanmaz). Biçim: kelime=sayı, virgülle ayır."
+                        draft={draft} set={set} />
                     <SelectField g="flow" k="teamMode" label="Takım puanı yöntemi"
                         hint="Sporcu toplamı: en iyi N sporcunun genel toplamı. Seri bazlı: her serinin en iyi N puanı ayrı seçilip toplanır."
                         options={[['athleteTotal', 'Sporcu toplamı (en iyi N sporcu)'], ['perRoutine', 'Seri bazlı (her serinin en iyi N puanı)']]}
@@ -428,6 +431,35 @@ function BoolField({ g, k, label, hint, draft, set }) {
                 <option value="on"  style={{ background: '#1e293b' }}>Açık</option>
                 <option value="off" style={{ background: '#1e293b' }}>Kapalı</option>
             </select>
+        </Field>
+    );
+}
+
+/** "kelime=sayı" çiftleri. Örn: "genç=2, büyük=2" */
+function KeywordMinField({ g, k, label, hint, draft, set }) {
+    const value = draft[g][k] || [];
+    const changed = isChanged(g, k, value);
+    const [raw, setRaw] = useState(null);
+    const toText = (arr) => (arr || []).map(x => `${x.keyword}=${x.min}`).join(', ');
+    const shown = raw !== null ? raw : toText(value);
+
+    const parse = (str) => str.split(',').map(p => p.trim()).filter(Boolean).map(p => {
+        const [kw, mn] = p.split('=');
+        return { keyword: (kw || '').trim(), min: Number(mn) || 3 };
+    }).filter(x => x.keyword);
+
+    return (
+        <Field label={label} hint={hint} changed={changed}
+            defaultValue={toText(DEFAULT_RULES[g][k])}
+            onReset={() => { setRaw(null); set(g, k, DEFAULT_RULES[g][k]); }}>
+            <input
+                type="text" value={shown}
+                onChange={e => { setRaw(e.target.value); set(g, k, parse(e.target.value)); }}
+                onBlur={() => setRaw(null)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                placeholder="genç=2, büyük=2"
+                style={{ ...inputStyle, borderColor: changed ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.15)' }}
+            />
         </Field>
     );
 }
