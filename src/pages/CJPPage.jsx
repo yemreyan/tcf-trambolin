@@ -549,6 +549,26 @@ export default function CJPPage() {
         }
     }
 
+    // ── Tek hakemin notunu iptal et ───────────────────────────────────────
+    // Sadece o hakemin düğümünü siler; diğer hakemlerin notları yerinde kalır.
+    // Hakem ekranı kendi düğümünü dinlediği için kilidi kendiliğinden açılır
+    // ve yeniden giriş yapabilir. "Sahaya Çağır" ise altı hakemi birden siler.
+    async function clearJudgeEntry(jId) {
+        if (isLocked) { toast('Puan yayınlandı — önce kilidi açın.', 'warning'); return; }
+        const label = jId.toUpperCase();
+        const ok = await confirm(
+            `${label} Notunu İptal Et`,
+            `${label} hakeminin girdiği kesintiler silinecek ve ekranı yeniden açılacak.\n\nDiğer hakemlerin notları etkilenmez.`
+        );
+        if (!ok) return;
+        try {
+            await remove(ref(db, `live/${compId}/panels/${currentPanel}/scores/judges/${jId}`));
+            toast(`${label} yeniden giriş yapabilir.`, 'info');
+        } catch (e) {
+            toast('İptal hatası: ' + e.message, 'error');
+        }
+    }
+
     // ── Sıfırla ───────────────────────────────────────────────────────────
     function resetScores() {
         setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
@@ -800,19 +820,36 @@ export default function CJPPage() {
                             >
                                 HAREKET <strong style={{ color: 'white' }}>{elementCount}</strong>
                             </div>
-                            {/* Hakem noktaları — submitted:true = yeşil, veri var = sarı, yok = gri */}
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+                            {/* Hakem rozetleri — yeşil: gönderdi, sarı: giriyor, gri: veri yok.
+                                Tıklanınca sadece o hakemin notu iptal edilir. */}
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12, flexWrap: 'wrap' }}>
                                 {['e1','e2','e3','e4','e5','e6'].map(jId => {
                                     const j = judgesData[jId];
                                     const submitted = j?.submitted === true;
                                     const hasData   = j && (j.deductions || j.scores);
-                                    const color = submitted ? '#10b981' : hasData ? '#eab308' : 'rgba(255,255,255,0.1)';
+                                    const active    = submitted || hasData;
+                                    const color = submitted ? '#10b981' : hasData ? '#eab308' : 'rgba(255,255,255,0.25)';
                                     return (
-                                        <div key={jId} title={jId.toUpperCase()} style={{
-                                            width: 10, height: 10, borderRadius: '50%',
-                                            background: color,
-                                            boxShadow: submitted ? '0 0 8px #10b981' : hasData ? '0 0 8px #eab308' : 'none',
-                                        }} />
+                                        <button
+                                            key={jId}
+                                            onClick={e => { e.stopPropagation(); clearJudgeEntry(jId); }}
+                                            disabled={!active}
+                                            title={active
+                                                ? `${jId.toUpperCase()} — notunu iptal et, yeniden girsin`
+                                                : `${jId.toUpperCase()} — henüz veri yok`}
+                                            style={{
+                                                minWidth: 30, padding: '3px 7px', borderRadius: 6,
+                                                fontSize: '0.68rem', fontWeight: 800, letterSpacing: 0.5,
+                                                background: active ? `${color}26` : 'transparent',
+                                                border: `1px solid ${active ? color : 'rgba(255,255,255,0.12)'}`,
+                                                color: active ? color : 'rgba(255,255,255,0.3)',
+                                                cursor: active ? 'pointer' : 'default',
+                                                boxShadow: submitted ? '0 0 8px rgba(16,185,129,0.4)' : 'none',
+                                                fontFamily: "'Outfit', sans-serif",
+                                            }}
+                                        >
+                                            {jId.toUpperCase()}
+                                        </button>
                                     );
                                 })}
                             </div>

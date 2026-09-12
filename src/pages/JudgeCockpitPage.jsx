@@ -53,6 +53,19 @@ export default function JudgeCockpitPage() {
     const [connected, setConnected] = useState(false);
 
     const unsubRef = useRef(null);
+    const ownUnsubRef = useRef(null);
+    // Son "sahaya çağırma" jetonu — aynı sporcu tekrar çağrıldığında da
+    // sıfırlama yapılabilmesi için sporcu kimliği + zaman damgası tutulur.
+    const lastCallRef = useRef(null);
+
+    // Girdi alanlarını sıfırla (yeni çağrı veya CJP iptali sonrası)
+    const resetEntry = useCallback(() => {
+        setDeductions(Array(JUMP_COUNT).fill(0));
+        setLanding(0);
+        setFocused(0);
+        setDVal('');
+        setSubmitted(false);
+    }, []);
 
     // ── Şifre Kapısı ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -74,27 +87,40 @@ export default function JudgeCockpitPage() {
             snap => {
                 const ctx = snap.val();
                 const currentAth = ctx?.current || null;
-                if (currentAth) {
-                    setAthlete(prev => {
-                        const prevId = prev?.uniqueId || prev?.id;
-                        const newId  = currentAth?.uniqueId || currentAth?.id;
-                        if (prevId !== newId) {
-                            // Yeni sporcu → tümünü sıfırla
-                            setDeductions(Array(JUMP_COUNT).fill(0));
-                            setLanding(0);
-                            setFocused(0);
-                            setDVal('');
-                            setSubmitted(false);
-                            if (navigator.vibrate) navigator.vibrate(200);
-                        }
-                        return currentAth;
-                    });
+                if (!currentAth) return;
+
+                // Sıfırlama yalnızca sporcu kimliğine bakılarak yapılırsa, CJP
+                // aynı sporcuyu tekrar sahaya çağırdığında ekran açılmıyordu.
+                // CJP her çağrıda hakem verilerini sildiği için jeton zaman
+                // damgasını da içerir.
+                const callToken = [
+                    currentAth.uniqueId || currentAth.id,
+                    ctx?.timestamp ?? '',
+                    ctx?.routine ?? '',
+                ].join('#');
+
+                if (lastCallRef.current !== callToken) {
+                    lastCallRef.current = callToken;
+                    resetEntry();
+                    if (navigator.vibrate) navigator.vibrate(200);
                 }
+                setAthlete(currentAth);
             }
         );
 
-        return () => { if (unsubRef.current) unsubRef.current(); };
-    }, [unlocked, compId, panel]);
+        // Kendi düğümünü dinle: CJP bu hakemin notunu iptal ederse (düğüm
+        // silinir) ekran kilidi kendiliğinden açılır ve girdiler sıfırlanır.
+        // Diğer hakemlerin notlarına dokunulmaz.
+        ownUnsubRef.current = onValue(
+            ref(db, `live/${compId}/panels/${panel}/scores/judges/${judgeKey}`),
+            snap => { if (!snap.exists()) resetEntry(); }
+        );
+
+        return () => {
+            if (unsubRef.current) unsubRef.current();
+            if (ownUnsubRef.current) ownUnsubRef.current();
+        };
+    }, [unlocked, compId, panel, judgeKey, resetEntry]);
 
     // ── İnaktivite ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -243,8 +269,11 @@ export default function JudgeCockpitPage() {
                         <div style={{ fontSize: '0.9rem', color: '#64748b', marginTop: 8 }}>
                             {athlete ? getAthleteName(athlete) : '—'}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 20, letterSpacing: 1 }}>
-                            Yeni sporcu çağrıldığında ekran açılır
+                        <button onClick={() => setSubmitted(false)} style={correctBtnStyle}>
+                            <i className="material-icons-round">edit</i> DÜZELT
+                        </button>
+                        <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 12, letterSpacing: 1 }}>
+                            Düzeltip tekrar gönderebilirsiniz
                         </div>
                     </div>
                 )}
@@ -418,8 +447,11 @@ export default function JudgeCockpitPage() {
                     <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
                         {athlete ? getAthleteName(athlete) : '—'}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 20, letterSpacing: 1 }}>
-                        Yeni sporcu çağrıldığında ekran açılır
+                    <button onClick={() => setSubmitted(false)} style={correctBtnStyle}>
+                        <i className="material-icons-round">edit</i> DÜZELT
+                    </button>
+                    <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 12, letterSpacing: 1 }}>
+                        Düzeltip tekrar gönderebilirsiniz
                     </div>
                 </div>
             )}
@@ -563,3 +595,16 @@ function JumpCard({ index, value, isFocused, options, onTap, label, disabled }) 
         </div>
     );
 }
+
+// Kilit perdesindeki "DÜZELT" butonu — gönderilen notu yeniden açar.
+// Yeniden gönderim yalnızca bu hakemin düğümünü yazar, diğerleri etkilenmez.
+const correctBtnStyle = {
+    marginTop: 24,
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.25)',
+    color: 'white', borderRadius: 12,
+    padding: '14px 28px', fontSize: '1rem', fontWeight: 700,
+    letterSpacing: 1, cursor: 'pointer',
+    fontFamily: "'Outfit', sans-serif",
+};
