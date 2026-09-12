@@ -417,6 +417,18 @@ export default function CJPPage() {
         set(ref(db, `live/${compId}/panels/${currentPanel}/scores/preview`), previewData).catch(() => {});
     }, [judgesData, inpT, inpH, inpH2, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
 
+    // ── Eleman sayısı değişince hakem ekranlarına anında yansıt ───────────
+    // Hakem kaç kutu göreceğini buradan okur; sporcu sahadayken HAREKET
+    // sayısı değiştirilirse ekranların da güncellenmesi gerekir.
+    useEffect(() => {
+        if (!compId || !selected) return;
+        if (liveActiveAthId !== selected.uniqueId) return; // sahada başkası varsa dokunma
+        set(
+            ref(db, `live/${compId}/panels/${currentPanel}/activeContext/elementCount`),
+            elementCount
+        ).catch(() => {});
+    }, [elementCount, compId, currentPanel, selected, liveActiveAthId]);
+
     // ── Sahaya Çağır ──────────────────────────────────────────────────────
     async function callToField() {
         if (!selected || !dsRef.current) return;
@@ -431,6 +443,8 @@ export default function CJPPage() {
             next: nextAth,
             routine: activeRoutine,
             categoryId: selected.catId,
+            // Hakem ekranları kaç eleman puanlayacağını buradan öğrenir
+            elementCount,
             timestamp: Date.now(),
         });
 

@@ -22,6 +22,11 @@ const DEDUCT_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5];
 const LANDING_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.5, 1.0];
 const JUMP_COUNT = 10;
 
+// Ortak tuş takımı — onda birlik tam sayı olarak yazılır (3 → 0.3, 10 → 1.0).
+// Seçili kutunun izin verdiği değerler dışındakiler pasifleşir: sıçramada
+// 1.0, inişte 0.4 geçerli değil.
+const KEYPAD = [0, 1, 2, 3, 4, 5, 10];
+
 export default function JudgeCockpitPage() {
     const [params] = useSearchParams();
     const { checkJudgeAccess, saveJudgeSession, isJudgeSessionValid, startInactivityTimer, clearJudgeSession } = useAuth();
@@ -45,12 +50,34 @@ export default function JudgeCockpitPage() {
     const [landing, setLanding]     = useState(0);
     const [focused, setFocused]     = useState(0);
 
+    // Hangi kutulara gerçekten değer girildi? Dizi 0'larla dolu başladığı için
+    // "0 kesinti verdim" ile "buraya hiç dokunmadım" ayırt edilemiyordu.
+    // Geri silme tuşu bu ayrımı gerektiriyor.
+    const [entered, setEntered]     = useState(Array(JUMP_COUNT).fill(false));
+    const [landingEntered, setLandingEntered] = useState(false);
+
+    // Kaç eleman puanlanacak — CJP'den activeContext üzerinden gelir.
+    // null = CJP henüz sporcuyu sahaya çağırmadı / değeri yazmadı.
+    const [elementCount, setElementCount] = useState(null);
+    const [routine, setRoutine] = useState(null);
+
+    // Girdilerin anlık doğrusu. State'e render için, ref'e senkron yazılır:
+    // iki kutuya arka arkaya hızlı basıldığında React henüz yeniden render
+    // etmediği için handler closure'daki eski diziyi görüyor ve ikinci
+    // dokunuş birincinin değerini siliyordu.
+    const deductionsRef = useRef(Array(JUMP_COUNT).fill(0));
+    const landingRef    = useRef(0);
+    const enteredRef    = useRef(Array(JUMP_COUNT).fill(false));
+    const landingEnteredRef = useRef(false);
+
     // D hakem state — tek zorluk değeri
     const [dVal, setDVal]           = useState('');
 
     const [athlete, setAthlete]     = useState(null);
     const [submitted, setSubmitted] = useState(false);
     const [connected, setConnected] = useState(false);
+    // Hakemin kendi adı — jüri panelinden okunur (Jüri ekranında girilir)
+    const [judgeName, setJudgeName] = useState('');
 
     const unsubRef = useRef(null);
     const ownUnsubRef = useRef(null);
@@ -65,11 +92,17 @@ export default function JudgeCockpitPage() {
 
     // Girdi alanlarını sıfırla (yeni çağrı veya CJP iptali sonrası)
     const resetEntry = useCallback(() => {
+        deductionsRef.current = Array(JUMP_COUNT).fill(0);
+        landingRef.current = 0;
+        enteredRef.current = Array(JUMP_COUNT).fill(false);
+        landingEnteredRef.current = false;
         setDeductions(Array(JUMP_COUNT).fill(0));
         setLanding(0);
         setFocused(0);
         setDVal('');
         setSubmitted(false);
+        setEntered(Array(JUMP_COUNT).fill(false));
+        setLandingEntered(false);
     }, []);
 
     // Firebase'deki kendi kaydından durumu geri yükle (sayfa yenilenmesi,
@@ -80,14 +113,47 @@ export default function JudgeCockpitPage() {
         const stored = data.deductions || data.scores;
         if (Array.isArray(stored)) {
             const arr = Array(JUMP_COUNT).fill(0);
+            const ent = Array(JUMP_COUNT).fill(false);
             stored.slice(0, JUMP_COUNT).forEach((v, i) => { arr[i] = Number(v) || 0; });
+            // Hangi kutunun gerçekten doldurulduğu kayıttan okunur. Bu alan
+            // olmayan eski kayıtlarda (geriye dönük) hepsi dolu sayılır.
+            if (Array.isArray(data.entered)) {
+                data.entered.slice(0, JUMP_COUNT).forEach((e, i) => { ent[i] = e === true; });
+            } else {
+                stored.slice(0, JUMP_COUNT).forEach((_, i) => { ent[i] = true; });
+            }
+            deductionsRef.current = arr;
+            enteredRef.current = ent;
             setDeductions(arr);
+            setEntered(ent);
         }
-        if (data.landing != null) setLanding(Number(data.landing) || 0);
+        if (data.landing != null) {
+            landingRef.current = Number(data.landing) || 0;
+            landingEnteredRef.current = data.landingEntered != null ? data.landingEntered === true : true;
+            setLanding(landingRef.current);
+            setLandingEntered(landingEnteredRef.current);
+        }
         if (data.val != null) setDVal(String(data.val));
         // Gönderilmiş bir not yenilendiğinde yine gönderilmiş görünmeli
         setSubmitted(data.submitted === true);
     }, []);
+
+    // ── Hakemin adı ───────────────────────────────────────────────────────
+    // URL'deki panel parametresi jüri paneli id'si ile aynı (JuryPage linkleri
+    // böyle üretiyor), isim oradaki members listesinden okunur.
+    useEffect(() => {
+        if (!compId || !panel) return;
+        const unsub = onValue(
+            ref(db, `competitions/${compId}/juryPanels/${panel}/members`),
+            snap => {
+                const m = snap.val() || {};
+                // D hakeminde jüri listesi d1/d2 tutuyor ama ekran anahtarı 'd'
+                const raw = isD ? (m[`d${judgeN}`] ?? m.d1 ?? m.d) : m[judgeKey];
+                setJudgeName(typeof raw === 'string' ? raw.trim() : (raw?.name || ''));
+            }
+        );
+        return () => unsub();
+    }, [compId, panel, judgeKey, isD, judgeN]);
 
     // ── Şifre Kapısı ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -132,6 +198,10 @@ export default function JudgeCockpitPage() {
                     resetEntry();
                     if (navigator.vibrate) navigator.vibrate(200);
                 }
+                // Kaç eleman puanlanacak — CJP sporcu sahadayken de değiştirebilir
+                const ec = Number(ctx?.elementCount);
+                setElementCount(Number.isFinite(ec) && ec >= 1 && ec <= JUMP_COUNT ? ec : null);
+                setRoutine(ctx?.routine ?? null);
                 setAthlete(currentAth);
             }
         );
@@ -189,22 +259,67 @@ export default function JudgeCockpitPage() {
     }
 
     // ── E Hakem: Tap sıçrama ──────────────────────────────────────────────
-    const tap = useCallback((index, val) => {
-        // Yeni kesinti dizisini burada hesapla (state updater dışında)
-        // böylece syncLive her zaman güncel değeri Firebase'e yazar.
-        const next = deductions.map((d, i) => i === index ? val : d);
+    // Not: değerler ref'ten okunur, state'ten değil — hızlı arka arkaya
+    // dokunuşlarda closure'daki eski dizi bir öncekinin değerini siliyordu.
+    const writeJump = useCallback((index, val, isEntered) => {
+        const next = deductionsRef.current.map((d, i) => i === index ? val : d);
+        const nextEntered = enteredRef.current.map((e, i) => i === index ? isEntered : e);
+        deductionsRef.current = next;
+        enteredRef.current = nextEntered;
         setDeductions(next);
-        syncLive({ deductions: next, landing }, false);
+        setEntered(nextEntered);
+        syncLive({
+            deductions: next, landing: landingRef.current,
+            entered: nextEntered, landingEntered: landingEnteredRef.current,
+        }, false);
         setSubmitted(false);
-        if (index < JUMP_COUNT - 1) setFocused(index + 1);
-        else setFocused(JUMP_COUNT);
-    }, [deductions, landing, athlete]);
+    }, [athlete]);
 
-    const tapLanding = useCallback((val) => {
+    const tap = useCallback((index, val) => {
+        writeJump(index, val, true);
+        const last = (elementCount || JUMP_COUNT) - 1;
+        setFocused(index < last ? index + 1 : JUMP_COUNT);
+    }, [writeJump, elementCount]);
+
+    // Geri silme — kutuyu boşaltır. Firebase'e 0 yazılır (dizi içine null
+    // yazılırsa Firebase anahtarı siler ve dizi kayar); boşluk ekranda kalır.
+    const clearJump = useCallback((index) => {
+        writeJump(index, 0, false);
+        setFocused(index);
+    }, [writeJump]);
+
+    const writeLanding = useCallback((val, isEntered) => {
+        landingRef.current = val;
+        landingEnteredRef.current = isEntered;
         setLanding(val);
-        syncLive({ deductions, landing: val }, false);
+        setLandingEntered(isEntered);
+        syncLive({
+            deductions: deductionsRef.current, landing: val,
+            entered: enteredRef.current, landingEntered: isEntered,
+        }, false);
         setSubmitted(false);
-    }, [deductions, athlete]);
+    }, [athlete]);
+
+    const tapLanding   = useCallback((val) => writeLanding(val, true), [writeLanding]);
+    const clearLanding = useCallback(() => writeLanding(0, false), [writeLanding]);
+
+    // ── Ortak tuş takımı ──────────────────────────────────────────────────
+    const isLandingFocused = focused === JUMP_COUNT;
+    const activeOptions = isLandingFocused ? LANDING_OPTIONS : DEDUCT_OPTIONS;
+
+    const pressKey = useCallback((tenths) => {
+        const val = tenths / 10;
+        if (isLandingFocused) tapLanding(val);
+        else tap(focused, val);
+    }, [isLandingFocused, tapLanding, tap, focused]);
+
+    const pressBackspace = useCallback(() => {
+        if (isLandingFocused) clearLanding();
+        else clearJump(focused);
+    }, [isLandingFocused, clearLanding, clearJump, focused]);
+
+    const focusedEntered = isLandingFocused ? landingEntered : entered[focused];
+    const routineLabel = routine ? ` — ${routine}. Seri` : '';
 
     // ── D Hakem: Değer değişimi ───────────────────────────────────────────
     function handleDValChange(v) {
@@ -218,13 +333,25 @@ export default function JudgeCockpitPage() {
         if (isD) {
             await syncLive({ val: parseFloat(dVal) || 0 }, true);
         } else {
-            await syncLive({ deductions, landing }, true);
+            // ref'ten oku — son dokunuş henüz render edilmemiş olabilir
+            await syncLive({
+                deductions: deductionsRef.current, landing: landingRef.current,
+                entered: enteredRef.current, landingEntered: landingEnteredRef.current,
+            }, true);
         }
         setSubmitted(true);
     }
 
     // ── E hakem toplam ────────────────────────────────────────────────────
-    const eTotal = deductions.reduce((a, b) => a + b, 0) + landing;
+    // Yalnızca puanlanan elemanlar sayılır; CJP de calcEScore'da fazlasını
+    // yok sayıyor, eskiden hakem gereksiz yere farklı bir toplam görüyordu.
+    const shownJumps = elementCount || JUMP_COUNT;
+    const eTotal = deductions.slice(0, shownJumps).reduce((a, b) => a + b, 0) + landing;
+
+    // Gönderim hazır mı — CJP eleman sayısını yazmadan puanlanacak eleman
+    // sayısı bilinmiyor, referans sistemde olduğu gibi gönderim kilitlenir.
+    const canSubmit = elementCount !== null && !!athlete;
+    const filledCount = entered.slice(0, shownJumps).filter(Boolean).length + (landingEntered ? 1 : 0);
 
     // ── Unlock ────────────────────────────────────────────────────────────
     function handleUnlock() {
@@ -264,7 +391,7 @@ export default function JudgeCockpitPage() {
                         }} />
                         <div>
                             <div style={{ fontSize: '0.8rem', letterSpacing: 2, color: '#888', textTransform: 'uppercase' }}>
-                                HAKEM {roleLabel}
+                                HAKEM {roleLabel}{judgeName ? ` · ${judgeName}` : ''}
                             </div>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
                                 {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR...'}
@@ -425,35 +552,79 @@ export default function JudgeCockpitPage() {
 
     // ── E Hakem Arayüzü ───────────────────────────────────────────────────
     return (
-        <div style={{ background: '#050505', color: '#fff', minHeight: '100vh', fontFamily: "'Outfit', sans-serif", overflow: 'hidden' }}>
-            {/* Header */}
-            <header style={{
-                position: 'fixed', top: 0, left: 0, right: 0, height: 70,
-                background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(10px)',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '0 20px', zIndex: 100,
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+            height: '100vh', color: '#fff', fontFamily: "'Outfit', sans-serif", overflow: 'hidden',
+            background: 'linear-gradient(115deg, #3b1d8f 0%, #6d1f7a 45%, #b81f3a 78%, #d92036 100%)',
+            position: 'relative',
+            display: 'flex', flexDirection: 'column',
+        }}>
+            {/* Başlık — üstte hakem, altında sahadaki sporcu */}
+            <header style={{ flexShrink: 0, zIndex: 100 }}>
+                {/* Satır 1: hakem + kategori/seri + kesinti toplamı */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: 'clamp(6px, 1.2vh, 12px) clamp(14px, 2.5vw, 28px)',
+                    gap: 12,
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{
+                            width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                            background: connected ? '#4ade80' : '#64748b',
+                            boxShadow: connected ? '0 0 10px #4ade80' : 'none',
+                        }} />
+                        <span style={{
+                            fontWeight: 800, fontSize: 'clamp(0.85rem, 1.9vw, 1.25rem)', letterSpacing: 1,
+                            flexShrink: 0,
+                        }}>
+                            {roleLabel}
+                        </span>
+                        {judgeName && (
+                            <span style={{
+                                fontWeight: 600, fontSize: 'clamp(0.8rem, 1.7vw, 1.15rem)',
+                                color: 'rgba(255,255,255,0.92)',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>
+                                {judgeName}
+                            </span>
+                        )}
+                    </div>
                     <div style={{
-                        width: 10, height: 10, borderRadius: '50%',
-                        background: connected ? '#00ff00' : '#333',
-                        boxShadow: connected ? '0 0 10px #00ff00' : 'none',
-                    }} />
-                    <div>
-                        <div style={{ fontSize: '0.8rem', letterSpacing: 2, color: '#888', textTransform: 'uppercase' }}>
-                            HAKEM {roleLabel}
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                            {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR...'}
-                        </div>
+                        display: 'flex', alignItems: 'center', gap: 'clamp(10px, 2vw, 24px)',
+                        fontSize: 'clamp(0.7rem, 1.5vw, 1rem)', fontWeight: 600,
+                        color: 'rgba(255,255,255,0.85)', minWidth: 0,
+                    }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {athlete?.catName || '—'}{routineLabel}
+                        </span>
+                        <span style={{
+                            fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                            background: 'rgba(0,0,0,0.25)', padding: '2px 10px', borderRadius: 6,
+                            flexShrink: 0,
+                        }}>
+                            {eTotal.toFixed(1)}
+                        </span>
                     </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#888' }}>KESİNTİ TOPLAMI</div>
-                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: '1.5rem', color: 'white' }}>
-                        {eTotal.toFixed(1)}
-                    </div>
+                {/* Satır 2: sahadaki sporcu + kulüp */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'rgba(255,255,255,0.14)',
+                    padding: 'clamp(4px, 0.9vh, 9px) clamp(14px, 2.5vw, 28px)',
+                    gap: 12,
+                }}>
+                    <span style={{
+                        fontWeight: 700, fontSize: 'clamp(0.78rem, 1.7vw, 1.1rem)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR…'}
+                    </span>
+                    <span style={{
+                        fontWeight: 700, fontSize: 'clamp(0.7rem, 1.5vw, 1rem)',
+                        color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {athlete ? getAthleteClub(athlete) : ''}
+                    </span>
                 </div>
             </header>
 
@@ -497,148 +668,161 @@ export default function JudgeCockpitPage() {
                 </div>
             )}
 
-            {/* Body */}
-            <div style={{ paddingTop: 80, paddingBottom: 120, overflowY: 'auto', height: '100vh', scrollBehavior: 'smooth' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: 20, maxWidth: 600, margin: '0 auto' }}>
-
-                    {/* 10 Sıçrama */}
-                    {Array.from({ length: JUMP_COUNT }, (_, i) => (
-                        <JumpCard
-                            key={i}
-                            index={i}
-                            value={deductions[i]}
-                            isFocused={focused === i}
-                            options={DEDUCT_OPTIONS}
-                            onTap={(val) => tap(i, val)}
-                            disabled={submitted}
-                        />
-                    ))}
-
-                    {/* İniş */}
-                    <div style={{ width: '100%', borderTop: '1px dashed #333', paddingTop: 15 }}>
-                        <JumpCard
-                            index="L"
-                            value={landing}
-                            isFocused={focused === JUMP_COUNT}
-                            options={LANDING_OPTIONS}
-                            onTap={tapLanding}
-                            label="İNİŞ (L)"
-                            disabled={submitted}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Submit Bar */}
+            {/* Body — tek ekran, kaydırma yok */}
             <div style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0, height: 110,
-                background: 'linear-gradient(to top, #000 60%, transparent)',
-                display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-                paddingBottom: 20, gap: 16,
+                flex: 1, minHeight: 0, width: '100%',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                gap: 'clamp(12px, 2.5vh, 28px)', padding: 'clamp(12px, 2vw, 28px)',
+                maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box',
             }}>
-                {/* Toplam pill */}
+                {/* CJP eleman sayısını yazmadıysa uyar */}
+                {athlete && elementCount === null && (
+                    <div style={{
+                        background: 'rgba(234,179,8,0.12)',
+                        border: '1px solid rgba(234,179,8,0.4)', borderRadius: 12,
+                        padding: '10px 16px', color: '#eab308',
+                        fontSize: 'clamp(0.75rem, 1.6vw, 0.95rem)',
+                        fontWeight: 600, textAlign: 'center',
+                    }}>
+                        Başhakem hareket sayısını henüz girmedi — gönderim kapalı.
+                    </div>
+                )}
+
+                {/* Kutular — #1..#N + L, hepsi tek satırda */}
                 <div style={{
-                    background: submitted ? '#10b981' : 'var(--accent-primary, #F43F5E)',
-                    color: 'white',
-                    padding: '10px 30px', borderRadius: 50,
-                    fontFamily: "'Space Mono', monospace", fontSize: '1.4rem', fontWeight: 700,
-                    boxShadow: submitted ? '0 0 20px rgba(16,185,129,0.5)' : '0 10px 30px rgba(0,0,0,0.5)',
-                    transition: 'all 0.3s',
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${shownJumps + 1}, 1fr)`,
+                    gap: 'clamp(4px, 0.8vw, 10px)',
                 }}>
-                    {eTotal.toFixed(1)}
+                    {Array.from({ length: shownJumps + 1 }, (_, i) => {
+                        const isL = i === shownJumps;
+                        const slot = isL ? JUMP_COUNT : i;
+                        const val = isL ? landing : deductions[i];
+                        const isEntered = isL ? landingEntered : entered[i];
+                        const isFocused = focused === slot;
+                        return (
+                            <div key={isL ? 'L' : i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <div style={{
+                                    textAlign: 'center',
+                                    fontSize: 'clamp(0.6rem, 1.3vw, 0.8rem)',
+                                    fontWeight: 700, letterSpacing: 0.5,
+                                    color: isFocused ? 'var(--accent-primary, #F43F5E)' : '#666',
+                                }}>
+                                    {isL ? 'L' : `#${i + 1}`}
+                                </div>
+                                <button
+                                    onClick={() => !submitted && setFocused(slot)}
+                                    disabled={submitted}
+                                    style={{
+                                        aspectRatio: '3 / 4',
+                                        // Kutular referanstaki gibi her zaman açık renk;
+                                        // dolu olan beyaz ve koyu yazılı, boş olan soluk.
+                                        background: isEntered ? '#ffffff' : 'rgba(255,255,255,0.72)',
+                                        border: `3px solid ${isFocused ? '#ffffff' : 'transparent'}`,
+                                        borderRadius: 8,
+                                        color: '#0f172a',
+                                        fontFamily: "'Space Mono', monospace",
+                                        fontSize: 'clamp(0.75rem, 1.7vw, 1.3rem)',
+                                        fontWeight: 700,
+                                        cursor: submitted ? 'not-allowed' : 'pointer',
+                                        boxShadow: isFocused ? '0 0 0 2px rgba(0,0,0,0.25), 0 6px 18px rgba(0,0,0,0.35)' : '0 2px 6px rgba(0,0,0,0.25)',
+                                        transition: 'all 0.12s',
+                                        padding: 0,
+                                    }}
+                                >
+                                    {isEntered ? val.toFixed(1) : ''}
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
-                {/* Submit butonu */}
+
+                {/* Gönder — CJP hareket sayısını yazmadan kilitli */}
                 <button
                     onClick={handleSubmit}
+                    disabled={!canSubmit || submitted}
+                    title={canSubmit ? '' : 'Başhakem hareket sayısını girmeden gönderilemez'}
                     style={{
-                        background: submitted ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.1)',
-                        border: `2px solid ${submitted ? '#10b981' : 'rgba(255,255,255,0.3)'}`,
-                        color: submitted ? '#10b981' : 'white',
-                        padding: '10px 24px', borderRadius: 50,
-                        fontSize: '1rem', fontWeight: 700, cursor: 'pointer',
-                        transition: 'all 0.3s',
+                        width: '100%', padding: 'clamp(10px, 2vh, 18px)',
+                        borderRadius: 12, border: 'none',
+                        background: submitted ? '#10b981' : 'var(--accent-primary, #F43F5E)',
+                        color: 'white',
+                        fontSize: 'clamp(0.9rem, 2vw, 1.15rem)',
+                        fontWeight: 800, letterSpacing: 2,
+                        fontFamily: "'Outfit', sans-serif",
+                        cursor: canSubmit && !submitted ? 'pointer' : 'not-allowed',
+                        opacity: canSubmit ? 1 : 0.35,
+                        transition: 'all 0.2s',
                     }}
                 >
-                    {submitted ? '✓ GÖNDERİLDİ' : 'GÖNDER'}
+                    {submitted ? '✓ GÖNDERİLDİ' : `GÖNDER  ${filledCount}/${shownJumps + 1}`}
                 </button>
+
+                {/* Ortak tuş takımı */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${KEYPAD.length + 1}, 1fr)`,
+                    gap: 'clamp(5px, 1vw, 12px)',
+                }}>
+                    {KEYPAD.map(k => {
+                        const allowed = activeOptions.includes(k / 10);
+                        const isCurrent = focusedEntered &&
+                            (isLandingFocused ? landing : deductions[focused]) === k / 10;
+                        return (
+                            <button
+                                key={k}
+                                onClick={() => !submitted && allowed && pressKey(k)}
+                                disabled={submitted || !allowed}
+                                title={allowed ? `${(k / 10).toFixed(1)}` : 'Bu kutuda geçerli değil'}
+                                style={{
+                                    aspectRatio: '4 / 3',
+                                    // Referanstaki gibi tuşlar beyaz, 1.0 (10) vurgulu pembe
+                                    background: isCurrent ? '#0f172a'
+                                        : !allowed ? 'rgba(255,255,255,0.18)'
+                                        : k === 10 ? '#f0a6c0' : '#f8fafc',
+                                    border: 'none', borderRadius: 10,
+                                    color: isCurrent ? '#fff' : allowed ? '#0f172a' : 'rgba(255,255,255,0.35)',
+                                    boxShadow: allowed ? '0 3px 10px rgba(0,0,0,0.3)' : 'none',
+                                    fontFamily: "'Space Mono', monospace",
+                                    fontSize: 'clamp(0.9rem, 2.2vw, 1.6rem)',
+                                    fontWeight: 700,
+                                    cursor: submitted || !allowed ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.1s',
+                                }}
+                                onPointerDown={e => { if (!submitted && allowed) e.currentTarget.style.transform = 'scale(0.92)'; }}
+                                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                            >
+                                {k}
+                            </button>
+                        );
+                    })}
+                    {/* Geri silme */}
+                    <button
+                        onClick={() => !submitted && focusedEntered && pressBackspace()}
+                        disabled={submitted || !focusedEntered}
+                        title="Seçili kutuyu temizle"
+                        style={{
+                            aspectRatio: '4 / 3',
+                            background: focusedEntered ? '#f8fafc' : 'rgba(255,255,255,0.18)',
+                            border: 'none', borderRadius: 10,
+                            color: focusedEntered ? '#0f172a' : 'rgba(255,255,255,0.35)',
+                            boxShadow: focusedEntered ? '0 3px 10px rgba(0,0,0,0.3)' : 'none',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: submitted || !focusedEntered ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.1s',
+                        }}
+                        onPointerDown={e => { if (!submitted && focusedEntered) e.currentTarget.style.transform = 'scale(0.92)'; }}
+                        onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    >
+                        <i className="material-icons-round" style={{ fontSize: 'clamp(1rem, 2.2vw, 1.6rem)' }}>backspace</i>
+                    </button>
+                </div>
             </div>
+
         </div>
     );
 }
 
-// ── JumpCard Alt Bileşeni ─────────────────────────────────────────────────
-function JumpCard({ index, value, isFocused, options, onTap, label, disabled }) {
-    const cardRef = useRef(null);
-
-    useEffect(() => {
-        if (isFocused && cardRef.current) {
-            cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }, [isFocused]);
-
-    const deductColors = {
-        0.3: { bg: '#ffaa00', color: '#000' },
-        0.4: { bg: '#ff5500', color: '#fff' },
-        0.5: { bg: '#ff0000', color: '#fff' },
-    };
-
-    return (
-        <div
-            ref={cardRef}
-            style={{
-                width: '100%',
-                background: isFocused ? '#161616' : '#111',
-                border: `1px solid ${isFocused ? 'var(--accent-primary, #F43F5E)' : '#222'}`,
-                borderRadius: 16, padding: 15,
-                display: 'grid', gridTemplateColumns: '50px 1fr',
-                transition: 'all 0.2s',
-                transform: isFocused ? 'scale(1.02)' : 'scale(1)',
-                boxShadow: isFocused ? '0 0 30px rgba(244,63,94,0.15)' : 'none',
-            }}
-        >
-            <div style={{
-                fontFamily: "'Space Mono', monospace", fontSize: '1.5rem',
-                color: isFocused ? 'var(--accent-primary, #F43F5E)' : '#444',
-                fontWeight: isFocused ? 700 : 400,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-                {label || index + 1}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${options.length}, 1fr)`, gap: 8 }}>
-                {options.map(val => {
-                    const isSelected = value === val;
-                    const dc = isSelected && deductColors[val];
-                    return (
-                        <button
-                            key={val}
-                            onClick={() => !disabled && onTap(val)}
-                            disabled={disabled}
-                            style={{
-                                aspectRatio: 1,
-                                background: isSelected ? (dc ? dc.bg : '#fff') : '#222',
-                                border: 'none', borderRadius: 8,
-                                color: isSelected ? (dc ? dc.color : '#000') : '#888',
-                                fontFamily: "'Space Mono', monospace", fontSize: '1rem',
-                                fontWeight: 700,
-                                cursor: disabled ? 'not-allowed' : 'pointer',
-                                transition: 'all 0.1s',
-                                opacity: disabled ? 0.5 : 1,
-                                boxShadow: isSelected && !dc ? '0 0 15px rgba(255,255,255,0.5)' : 'none',
-                            }}
-                            onPointerDown={e => { if (!disabled) e.currentTarget.style.transform = 'scale(0.9)'; }}
-                            onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-                        >
-                            {val}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-// Kilit perdesindeki "DÜZELT" butonu — gönderilen notu yeniden açar.
-// Yeniden gönderim yalnızca bu hakemin düğümünü yazar, diğerleri etkilenmez.
 const correctBtnStyle = {
     marginTop: 24,
     display: 'flex', alignItems: 'center', gap: 8,
