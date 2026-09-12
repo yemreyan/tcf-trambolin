@@ -385,16 +385,25 @@ export default function JudgeCockpitPage() {
     // CJP eleman sayısını yazmamışsa (sporcu bu sürümden önce sahaya
     // çağrılmışsa olur) 10 elemanla devam edilir — puanlama kilitlenmez.
     const canSubmit = !!athlete;
-    const boxCount = shownJumps + (showLanding ? 1 : 0);
+    // Izgara HER ZAMAN tam genişlikte kurulur (maxElements + L). Hareket
+    // sayısı azalınca kutular kaybolmuyor, yalnızca pasifleşiyor — aksi halde
+    // kalan kutular büyüyüp hakemin dokunma hedefleri kayıyordu.
+    const slotCount = JUMP_COUNT + 1;
+    const activeCount = shownJumps + (showLanding ? 1 : 0);
     const filledCount = entered.slice(0, shownJumps).filter(Boolean).length
         + (showLanding && landingEntered ? 1 : 0);
 
-    // L gizlendiğinde (hareket sayısı 10'un altına düştü): odak kutulara
-    // döner ve daha önce girilmiş iniş değeri temizlenir — aksi halde CJP
-    // hesabında görünmeyen bir kesinti kalırdı.
+    // Hareket sayısı azalınca: odak pasifleşen kutuda kalmasın. İniş de
+    // kapandıysa daha önce girilmiş iniş değeri temizlenir — aksi halde CJP
+    // hesabında ekranda görünmeyen bir kesinti kalırdı. Sıçrama kutularındaki
+    // değerler SİLİNMEZ; kutu pasif ama görünür kaldığı için hakem ne girdiğini
+    // görebiliyor ve CJP zaten yalnızca ilk N elemanı sayıyor.
     useEffect(() => {
+        // Odak pasifleşen bir kutuda kalmasın
+        if (focused === JUMP_COUNT ? !showLanding : focused >= shownJumps) {
+            setFocused(Math.max(0, shownJumps - 1));
+        }
         if (showLanding) return;
-        if (focused === JUMP_COUNT) setFocused(Math.max(0, shownJumps - 1));
         if (landingEnteredRef.current || landingRef.current !== 0) clearLanding();
     }, [showLanding, shownJumps, focused, clearLanding]);
 
@@ -648,15 +657,17 @@ export default function JudgeCockpitPage() {
                 {/* Kutular — #1..#N + L, hepsi tek satırda */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${boxCount}, 1fr)`,
+                    gridTemplateColumns: `repeat(${slotCount}, 1fr)`,
                     gap: 'clamp(4px, 0.8vw, 10px)',
                 }}>
-                    {Array.from({ length: boxCount }, (_, i) => {
-                        const isL = showLanding && i === shownJumps;
-                        const slot = isL ? JUMP_COUNT : i;
+                    {Array.from({ length: slotCount }, (_, i) => {
+                        const isL = i === JUMP_COUNT;
+                        const slot = i;
+                        // Bu kutu puanlanıyor mu? Hayırsa görünür ama pasif.
+                        const isActive = isL ? showLanding : i < shownJumps;
                         const val = isL ? landing : deductions[i];
                         const isEntered = isL ? landingEntered : entered[i];
-                        const isFocused = focused === slot;
+                        const isFocused = isActive && focused === slot;
                         return (
                             <div key={isL ? 'L' : i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <div style={{
@@ -664,28 +675,34 @@ export default function JudgeCockpitPage() {
                                     fontSize: 'clamp(0.6rem, 1.3vw, 0.8rem)',
                                     fontWeight: 800, letterSpacing: 0.5,
                                     // Gradyan zemin üzerinde #666 okunmuyordu
-                                    color: isFocused ? '#ffffff' : 'rgba(255,255,255,0.8)',
+                                    color: !isActive ? 'rgba(255,255,255,0.28)'
+                                        : isFocused ? '#ffffff' : 'rgba(255,255,255,0.8)',
                                     textShadow: '0 1px 3px rgba(0,0,0,0.5)',
                                 }}>
                                     {isL ? 'L' : `#${i + 1}`}
                                 </div>
                                 <button
-                                    onClick={() => !submitted && setFocused(slot)}
-                                    disabled={submitted}
+                                    onClick={() => !submitted && isActive && setFocused(slot)}
+                                    disabled={submitted || !isActive}
+                                    title={isActive ? '' : 'Bu harekette puanlama yok'}
                                     style={{
                                         aspectRatio: '3 / 4',
                                         // Kutular referanstaki gibi her zaman açık renk;
                                         // dolu olan beyaz ve koyu yazılı, boş olan soluk.
-                                        background: '#ffffff',
+                                        // Pasif kutu: soluk, saydam, tıklanamaz
+                                        background: isActive ? '#ffffff' : 'rgba(255,255,255,0.16)',
                                         border: `3px solid ${isFocused ? '#0f172a' : 'transparent'}`,
                                         borderRadius: 8,
                                         // Boşken kutu numarası soluk gri placeholder olarak durur
-                                        color: isEntered ? '#0f172a' : '#c2ccd9',
+                                        color: !isActive ? 'rgba(255,255,255,0.35)'
+                                            : isEntered ? '#0f172a' : '#c2ccd9',
                                         fontFamily: "'Space Mono', monospace",
                                         fontSize: 'clamp(0.75rem, 1.7vw, 1.3rem)',
                                         fontWeight: 700,
-                                        cursor: submitted ? 'not-allowed' : 'pointer',
-                                        boxShadow: isFocused ? '0 0 0 2px rgba(0,0,0,0.25), 0 6px 18px rgba(0,0,0,0.35)' : '0 2px 6px rgba(0,0,0,0.25)',
+                                        cursor: submitted || !isActive ? 'not-allowed' : 'pointer',
+                                        boxShadow: !isActive ? 'none'
+                                            : isFocused ? '0 0 0 2px rgba(0,0,0,0.25), 0 6px 18px rgba(0,0,0,0.35)'
+                                            : '0 2px 6px rgba(0,0,0,0.25)',
                                         transition: 'all 0.12s',
                                         padding: 0,
                                     }}
@@ -715,7 +732,7 @@ export default function JudgeCockpitPage() {
                         transition: 'all 0.2s',
                     }}
                 >
-                    {submitted ? '✓ GÖNDERİLDİ' : `GÖNDER  ${filledCount}/${boxCount}`}
+                    {submitted ? '✓ GÖNDERİLDİ' : `GÖNDER  ${filledCount}/${activeCount}`}
                 </button>
 
                 {/* Ortak tuş takımı */}
