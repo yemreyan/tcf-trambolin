@@ -109,15 +109,22 @@ export default function ScoreboardPage() {
     // Yayınlandı mı yoksa canlı mı?
     const isPublished = result?.status === 'published';
 
-    // Sporcu adı gösterimi
-    const athleteSurname   = athlete ? (
-        athlete.isPair || isSync
+    // Sporcu adı — tek blok "İSİM SOYAD" (sync kategorilerinde çift adı).
+    // Uzun isim alt satıra kayar. Kart 100vh ızgarada sabit yükseklikte ve
+    // overflow:hidden olduğu için punto isim uzunluğuna göre kademeli küçülür;
+    // aksi halde ikinci satır altındaki kulüp adını kırpardı.
+    const isPairLabel = !!athlete && (athlete.isPair || isSync);
+    const athleteDisplayName = !athlete ? '' : (
+        isPairLabel
             ? (athlete.pairName || athlete.displayName || '')
-            : (athlete.surname || '')
-    ) : '';
-    const athleteFirstName = (athlete && !athlete.isPair && !isSync)
-        ? (athlete.name || '')
-        : '';
+            : `${athlete.name || ''} ${athlete.surname || ''}`.trim()
+    );
+    // vw bileşeni küçük ekranlarda da orantılı kalmasını sağlar
+    const nameLen = athleteDisplayName.length;
+    const nameFontSize =
+        nameLen <= 14 ? 'clamp(2.4rem, 4.4vw, 4.6rem)' :
+        nameLen <= 22 ? 'clamp(2.0rem, 3.6vw, 3.8rem)' :
+                        'clamp(1.6rem, 2.9vw, 3.0rem)';
 
     // H değeri (her iki modda da gösterilir)
     const hVal    = result?.h  ?? null;
@@ -229,29 +236,21 @@ export default function ScoreboardPage() {
                                 )}
                             </div>
 
-                            {/* Sporcu adı */}
+                            {/* Sporcu adı — İSİM SOYAD, gerekirse alt satıra kayar */}
                             <div style={{
-                                fontSize: athlete.isPair || isSync ? '3.8rem' : '5rem',
+                                fontSize: nameFontSize,
                                 fontWeight: 900, color: '#fff', textTransform: 'uppercase',
-                                lineHeight: 0.95, textShadow: '0 4px 20px rgba(0,0,0,0.8)',
-                                marginBottom: 8, zIndex: 1, wordBreak: 'break-word',
+                                lineHeight: 1.02, textShadow: '0 4px 20px rgba(0,0,0,0.8)',
+                                marginBottom: 16, zIndex: 1,
+                                width: '100%', wordBreak: 'break-word', overflowWrap: 'anywhere',
                             }}>
-                                {athleteSurname}
+                                {athleteDisplayName}
                             </div>
-                            {athleteFirstName && (
-                                <div style={{
-                                    fontSize: '2.6rem', fontWeight: 700, color: '#e2e8f0',
-                                    textTransform: 'uppercase', marginBottom: 20,
-                                    textShadow: '0 2px 8px rgba(0,0,0,0.5)', zIndex: 1,
-                                }}>
-                                    {athleteFirstName}
-                                </div>
-                            )}
 
                             {/* Kulüp */}
                             <div style={{
                                 fontSize: '1.5rem', color: '#38BDF8', fontWeight: 600,
-                                marginTop: athleteFirstName ? 0 : 16, zIndex: 1,
+                                zIndex: 1,
                             }}>
                                 {athlete.club || ''}
                             </div>

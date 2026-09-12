@@ -275,7 +275,7 @@ export default function StartListPage() {
                         ${sec.athletes.map((a, i) => `
                             <tr class="${i % 2 === 0 ? 'even' : ''}">
                                 <td class="col-no num">${i + 1}</td>
-                                <td class="col-name bold">${esc((a.surname || '').toUpperCase())} ${esc(a.name || '')}</td>
+                                <td class="col-name bold">${esc(a.name || '')} ${esc((a.surname || '').toUpperCase())}</td>
                                 <td class="col-club">${esc(a.club || '—')}</td>
                             </tr>
                         `).join('')}

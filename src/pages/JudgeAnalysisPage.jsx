@@ -116,7 +116,7 @@ export default function JudgeAnalysisPage() {
                 } else if (ath) {
                     const surname = ath.surname || ath.soyad || ath.lastName  || '';
                     const name    = ath.name    || ath.ad    || ath.firstName || '';
-                    athleteName = `${surname} ${name}`.trim() || ath.displayName || athId;
+                    athleteName = `${name} ${surname}`.trim() || ath.displayName || athId;
                 } else {
                     athleteName = athId;
                 }

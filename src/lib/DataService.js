@@ -68,7 +68,7 @@ export function getAthleteName(ath) {
     // Olası alan adları: name/surname, ad/soyad, firstName/lastName, isim/soyisim
     const name    = ath.name    || ath.ad      || ath.firstName || ath.isim    || '';
     const surname = ath.surname || ath.soyad   || ath.lastName  || ath.soyisim || '';
-    const full = `${surname} ${name}`.trim();
+    const full = `${name} ${surname}`.trim();
     return full || ath.id || '—';
 }
 
