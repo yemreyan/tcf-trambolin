@@ -14,7 +14,7 @@ import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { DEFAULT_RULES, mergeRules, saveRules, isChanged } from '../lib/Rules';
+import { DEFAULT_RULES, mergeRules, saveRules, isChanged, resolveCategoryRules, saveCategoryRule } from '../lib/Rules';
 
 export default function RulesPage() {
     const navigate = useNavigate();
@@ -28,11 +28,13 @@ export default function RulesPage() {
     const [saved, setSaved]       = useState(() => mergeRules(null));
     const [loading, setLoading]   = useState(true);
     const [busy, setBusy]         = useState(false);
+    const [categories, setCategories] = useState({});
 
     useEffect(() => {
         if (!compId) { navigate('/'); return; }
         const unsubs = [];
         unsubs.push(onValue(ref(db, `competitions/${compId}/name`), s => setCompName(s.val() || '')));
+        unsubs.push(onValue(ref(db, `competitions/${compId}/categories`), s => setCategories(s.val() || {})));
         unsubs.push(onValue(ref(db, `competitions/${compId}/rules`), s => {
             const merged = mergeRules(s.val());
             setSaved(merged);
@@ -194,9 +196,79 @@ export default function RulesPage() {
                         hint="Finalistlerin ardından yedek olarak eklenecek sayı" min={0} max={10} step={1} draft={draft} set={set} />
                     <NumField g="flow" k="teamTopN" label="Takım puanına sayılan sporcu"
                         hint="Kulüp sıralamasında en iyi kaç sporcunun puanı toplanır" min={1} max={10} step={1} draft={draft} set={set} />
+                    <SelectField g="flow" k="teamMode" label="Takım puanı yöntemi"
+                        hint="Sporcu toplamı: en iyi N sporcunun genel toplamı. Seri bazlı: her serinin en iyi N puanı ayrı seçilip toplanır."
+                        options={[['athleteTotal', 'Sporcu toplamı (en iyi N sporcu)'], ['perRoutine', 'Seri bazlı (her serinin en iyi N puanı)']]}
+                        draft={draft} set={set} />
+                    <NumField g="flow" k="teamPerRoutineMinAthletes" label="Seri bazlı için en az sporcu"
+                        hint="Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır; altındaysa sporcu toplamına düşülür"
+                        min={1} max={12} step={1} draft={draft} set={set} />
+                    <SelectField g="flow" k="routineCount" label="Varsayılan seri sayısı"
+                        hint="Kategoride ayrı belirtilmezse geçerli olur"
+                        options={[[1, 'Tek seri'], [2, 'İki seri']]} numeric draft={draft} set={set} />
+                    <BoolField g="flow" k="hasDScore" label="Zorluk (D) puanı kullanılıyor"
+                        hint="Kapalıysa D puanı toplama girmez ve başhakemde gösterilmez" draft={draft} set={set} />
+                    <BoolField g="flow" k="hasTeam" label="Takım sıralaması yapılıyor"
+                        hint="Kapalıysa takım sekmesi boş kalır" draft={draft} set={set} />
                 </Section>
 
                 {/* ── Ekran / oturum ─────────────────────────────────────── */}
+                {/* ── Kategori bazlı ─────────────────────────────────────── */}
+                <Section
+                    title="Kategori Bazlı Kurallar"
+                    icon="category"
+                    accent="#c084fc"
+                    warn="Burada yapılan değişiklik ANINDA kaydedilir; yukarıdaki Kaydet düğmesini beklemez."
+                >
+                    <p style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 0 }}>
+                        Boş bırakılan (Devral) alanlarda yukarıdaki yarışma geneli kural geçerlidir.
+                    </p>
+                    {Object.keys(categories).length === 0 ? (
+                        <div style={{ color: '#475569', padding: '10px 0' }}>Bu yarışmada kategori tanımlı değil.</div>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
+                                <thead>
+                                    <tr style={{ color: '#64748b', fontSize: '0.72rem', letterSpacing: 1 }}>
+                                        <th style={catTh}>KATEGORİ</th>
+                                        <th style={catTh}>SERİ TOPLAMA</th>
+                                        <th style={catTh}>SERİ SAYISI</th>
+                                        <th style={catTh}>D PUANI</th>
+                                        <th style={catTh}>TAKIM</th>
+                                        <th style={catTh}>TAKIM YÖNTEMİ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.values(categories).map(cat => {
+                                        const eff = resolveCategoryRules(draft, cat);
+                                        const own = cat.rules || {};
+                                        return (
+                                            <tr key={cat.id} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                                <td style={{ ...catTd, fontWeight: 600, color: '#e2e8f0' }}>
+                                                    {cat.name}
+                                                    {cat.type === 'sync' && (
+                                                        <span style={{ color: '#c084fc', fontSize: '0.7rem', marginLeft: 6 }}>SENKRON</span>
+                                                    )}
+                                                </td>
+                                                <CatCell compId={compId} catId={cat.id} k="scoringRule" own={own} eff={eff.scoringRule}
+                                                    options={[['sum', 'Toplam'], ['max', 'En iyisi']]} toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="routineCount" own={own} eff={eff.routineCount}
+                                                    options={[[1, 'Tek seri'], [2, 'İki seri']]} numeric toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="hasDScore" own={own} eff={eff.hasDScore}
+                                                    options={[[true, 'Var'], [false, 'Yok']]} bool toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="hasTeam" own={own} eff={eff.hasTeam}
+                                                    options={[[true, 'Var'], [false, 'Yok']]} bool toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="teamMode" own={own} eff={eff.teamMode}
+                                                    options={[['athleteTotal', 'Sporcu toplamı'], ['perRoutine', 'Seri bazlı']]} toast={toast} />
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </Section>
+
                 <Section title="Ekran ve Oturum" icon="settings" accent="#8b5cf6">
                     <NumField g="session" k="inactivityMinutes" label="Ekran kilidi süresi (dakika)"
                         hint="Hakem/başhakem ekranı bu süre dokunulmazsa kilitlenir. Şifre tanımlı değilse kilit çalışmaz."
@@ -319,18 +391,34 @@ function NumField({ g, k, label, hint, min, max, step, draft, set }) {
     );
 }
 
-function SelectField({ g, k, label, hint, options, draft, set }) {
+function SelectField({ g, k, label, hint, options, draft, set, numeric }) {
     const value = draft[g][k];
     const changed = isChanged(g, k, value);
     return (
         <Field label={label} hint={hint} changed={changed}
             defaultValue={DEFAULT_RULES[g][k]}
             onReset={() => set(g, k, DEFAULT_RULES[g][k])}>
-            <select value={value} onChange={e => set(g, k, e.target.value)}
+            <select value={value} onChange={e => set(g, k, numeric ? Number(e.target.value) : e.target.value)}
                 style={{ ...inputStyle, borderColor: changed ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.15)' }}>
                 {options.map(([v, l]) => (
                     <option key={v} value={v} style={{ background: '#1e293b' }}>{l}</option>
                 ))}
+            </select>
+        </Field>
+    );
+}
+
+function BoolField({ g, k, label, hint, draft, set }) {
+    const value = draft[g][k] !== false;
+    const changed = isChanged(g, k, value);
+    return (
+        <Field label={label} hint={hint} changed={changed}
+            defaultValue={DEFAULT_RULES[g][k] ? 'Açık' : 'Kapalı'}
+            onReset={() => set(g, k, DEFAULT_RULES[g][k])}>
+            <select value={value ? 'on' : 'off'} onChange={e => set(g, k, e.target.value === 'on')}
+                style={{ ...inputStyle, borderColor: changed ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.15)' }}>
+                <option value="on"  style={{ background: '#1e293b' }}>Açık</option>
+                <option value="off" style={{ background: '#1e293b' }}>Kapalı</option>
             </select>
         </Field>
     );
@@ -367,5 +455,57 @@ function ListField({ g, k, label, hint, draft, set, text }) {
                 style={{ ...inputStyle, borderColor: changed ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.15)' }}
             />
         </Field>
+    );
+}
+
+/* ── Kategori tablosu ────────────────────────────────────────────────────── */
+const catTh = { textAlign: 'left', padding: '8px 10px', fontWeight: 700 };
+const catTd = { padding: '8px 10px', fontSize: '0.85rem' };
+
+/**
+ * Kategori kuralı hücresi. "Devral" seçilirse alan silinir ve yarışma geneli
+ * kural geçerli olur; parantez içinde o an geçerli değer gösterilir.
+ */
+function CatCell({ compId, catId, k, own, eff, options, numeric, bool, toast }) {
+    const raw = own[k];
+    const isInherited = raw === undefined || raw === null || raw === '';
+    const current = isInherited ? '' : String(raw);
+
+    const effLabel = (() => {
+        const hit = options.find(([v]) => String(v) === String(eff));
+        return hit ? hit[1] : String(eff);
+    })();
+
+    async function change(v) {
+        let value = null;                       // '' → devral (alanı sil)
+        if (v !== '') {
+            if (bool) value = v === 'true';
+            else if (numeric) value = Number(v);
+            else value = v;
+        }
+        try {
+            await saveCategoryRule(compId, catId, k, value);
+        } catch (e) {
+            toast('Kaydedilemedi: ' + e.message, 'error');
+        }
+    }
+
+    return (
+        <td style={catTd}>
+            <select
+                value={current}
+                onChange={e => change(e.target.value)}
+                style={{
+                    ...inputStyle, padding: '6px 8px', fontSize: '0.82rem',
+                    borderColor: isInherited ? 'rgba(255,255,255,0.12)' : 'rgba(192,132,252,0.5)',
+                    color: isInherited ? '#94a3b8' : '#fff',
+                }}
+            >
+                <option value="" style={{ background: '#1e293b' }}>Devral ({effLabel})</option>
+                {options.map(([v, l]) => (
+                    <option key={String(v)} value={String(v)} style={{ background: '#1e293b' }}>{l}</option>
+                ))}
+            </select>
+        </td>
     );
 }

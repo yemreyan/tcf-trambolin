@@ -26,7 +26,7 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
-import { useRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules } from '../lib/Rules';
 
 
 
@@ -166,7 +166,7 @@ export default function ResultsLivePage() {
 
     // ── Sıralama hesapla ──────────────────────────────────────────────────
     function computeRanking(cat) {
-        const rule   = getScoringRule(cat, rules.flow);
+        const rule   = resolveCategoryRules(rules, cat).scoringRule;
         const isSync = cat.type === 'sync';
 
         // Pair lookup map (pair.id → pair) — kategoriden bağımsız

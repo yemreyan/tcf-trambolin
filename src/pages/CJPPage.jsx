@@ -23,7 +23,7 @@ import {
 } from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { useRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules } from '../lib/Rules';
 import PasswordGate from '../components/PasswordGate';
 
 export default function CJPPage() {
@@ -86,6 +86,11 @@ export default function CJPPage() {
     // Sync mi? — eScore hesabından ÖNCE belirlenmeli (base değerini etkiler)
     const isSync = selected?.catType === 'sync';
 
+    // Kategori bazlı kurallar: D puanı var mı, kaç seri, toplama kuralı.
+    // Kategoride tanımlı değilse yarışma geneli geçerli.
+    const selectedCategory = selected ? allCategories[selected.catId] : null;
+    const catRules = resolveCategoryRules(rules, selectedCategory);
+
     // judgesData panelin SAHADAKİ sporcusuna aittir (callToField DB'de siler).
     // Eskiden sporcu seçilince yerel kopya siliniyordu; dinleyici yalnızca veri
     // DEĞİŞİNCE tetiklendiği için notlar ekrandan uçuyor ve bir daha gelmiyordu
@@ -100,7 +105,9 @@ export default function CJPPage() {
 
     // D: önce D hakeminden oku, yoksa manuel girişi kullan
     const dFromJudge = getDScoreFromJudge(activeJudges);
-    const dVal = dFromJudge !== null ? dFromJudge : (parseFloat(dInput) || 0);
+    const dValRaw = dFromJudge !== null ? dFromJudge : (parseFloat(dInput) || 0);
+    // Kategoride D puanı kapalıysa toplama hiç girmez
+    const dVal = catRules.hasDScore ? dValRaw : 0;
 
     const tVal   = parseFloat(inpT)  || 0;
     const h1Val  = parseFloat(inpH)  || 0; // Bireysel: H | Sync: H1
@@ -258,7 +265,8 @@ export default function CJPPage() {
 
         // Mevcut sonuçlara bak
         const athRes = competitionResults[ath.uniqueId] || {};
-        if (!athRes.r1) setActiveRoutine(1);
+        // Tek serili kategoride 2. seriye geçilmez
+        if (!athRes.r1 || catRules.routineCount < 2) setActiveRoutine(1);
         else if (!athRes.r2) setActiveRoutine(2);
     }
 
@@ -409,7 +417,7 @@ export default function CJPPage() {
                 });
                 toast(`${currentStatus} yayınlandı.`, 'info');
                 setIsLocked(true);
-                if (activeRoutine === 1) setActiveRoutine(2);
+                if (activeRoutine === 1 && catRules.routineCount >= 2) setActiveRoutine(2);
             } catch (e) {
                 toast('Yayınlama hatası: ' + e.message, 'error');
             } finally {
@@ -487,7 +495,7 @@ export default function CJPPage() {
             });
             toast('Puan yayınlandı!', 'success');
             setIsLocked(true);
-            if (activeRoutine === 1) setActiveRoutine(2);
+            if (activeRoutine === 1 && catRules.routineCount >= 2) setActiveRoutine(2);
         } catch (e) {
             toast('Yayınlama hatası: ' + e.message, 'error');
         } finally {
@@ -717,7 +725,7 @@ export default function CJPPage() {
                         <div style={{ textAlign: 'right' }}>
                             {/* Rutin Sekmeleri */}
                             <div style={{ display: 'flex', gap: 6, background: 'rgba(0,0,0,0.3)', padding: 4, borderRadius: 10, marginBottom: 6 }}>
-                                {[1, 2].map(r => (
+                                {Array.from({ length: catRules.routineCount }, (_, i) => i + 1).map(r => (
                                     <button
                                         key={r}
                                         onClick={() => setActiveRoutine(r)}
@@ -811,6 +819,7 @@ export default function CJPPage() {
                             )}
                         </HudCard>
 
+                        {catRules.hasDScore && (
                         <HudCard label="DIFFICULTY (D)" accent="#f59e0b">
                             {dFromJudge !== null ? (
                                 // D hakeminden gelen değer — büyük göster
@@ -830,6 +839,7 @@ export default function CJPPage() {
                                 />
                             )}
                         </HudCard>
+                        )}
 
                         {/* T kartı: Bireysel'de aktif, Sync'te devre dışı */}
                         <HudCard label="TIME (T)" accent="#38bdf8"

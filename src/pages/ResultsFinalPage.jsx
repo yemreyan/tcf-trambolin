@@ -27,7 +27,7 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
-import { useRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules } from '../lib/Rules';
 
 export default function ResultsFinalPage() {
     const navigate  = useNavigate();
@@ -90,7 +90,10 @@ export default function ResultsFinalPage() {
     }, [compId]);
 
     const currentCat = categories[selectedCatId] || null;
-    const rule       = currentCat ? getScoringRule(currentCat, rules.flow) : rules.flow.defaultScoringRule;
+        // Kategori bazlı kurallar (seri sayısı, toplama, takım)
+    const catRules   = resolveCategoryRules(rules, currentCat);
+    const rule       = currentCat ? catRules.scoringRule : rules.flow.defaultScoringRule;
+    const showR2     = catRules.routineCount >= 2;
     const isSync     = currentCat?.type === 'sync';
 
 
@@ -197,22 +200,69 @@ export default function ResultsFinalPage() {
 
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
-        if (!currentCat) return [];
+        if (!currentCat || !catRules.hasTeam) return [];
+
         const byClub = {};
         individualRanking.forEach(row => {
             const club = getAthleteClub(row.a) || row.a.club || 'Bilinmeyen';
             if (!byClub[club]) byClub[club] = [];
             byClub[club].push(row);
         });
+
+        const topN = rules.flow.teamTopN;
+
         const teams = Object.entries(byClub).map(([club, rows]) => {
-            rows.sort((a, b) => b.total - a.total);
-            const top3 = rows.slice(0, rules.flow.teamTopN);
-            const teamTotal = top3.reduce((s, r) => s + r.total, 0);
-            return { club, members: rows, top3, teamTotal };
+            // Kulübün sporcularını genel toplamına göre sırala (gösterim için).
+            // rows.sort yerine kopya — individualRanking ile aynı nesneler.
+            const byTotal = [...rows].sort((a, b) => b.total - a.total);
+
+            // Seri bazlı yöntem yalnızca kulüpte yeterli sporcu varsa uygulanır:
+            // her serinin en iyi N puanı AYRI AYRI seçilip toplanır, yani
+            // 1. serinin en iyi 3'ü ile 2. serinin en iyi 3'ü farklı sporcular
+            // olabilir.
+            const perRoutine =
+                catRules.teamMode === 'perRoutine' &&
+                rows.length >= catRules.teamPerRoutineMinAthletes;
+
+            let teamTotal;
+            let routineBreakdown = null;
+
+            if (perRoutine) {
+                const bestOf = (key) => [...rows]
+                    .map(r => r[key])
+                    .filter(v => v != null)
+                    .sort((a, b) => b - a)
+                    .slice(0, topN);
+                const r1Best = bestOf('r1');
+                const r2Best = catRules.routineCount >= 2 ? bestOf('r2') : [];
+                teamTotal = [...r1Best, ...r2Best].reduce((a, b) => a + b, 0);
+                routineBreakdown = {
+                    r1: r1Best.reduce((a, b) => a + b, 0),
+                    r2: r2Best.reduce((a, b) => a + b, 0),
+                    r1Count: r1Best.length,
+                    r2Count: r2Best.length,
+                };
+            } else {
+                teamTotal = byTotal.slice(0, topN).reduce((s, r) => s + r.total, 0);
+            }
+
+            return {
+                club,
+                members: byTotal,
+                top3: byTotal.slice(0, topN),
+                teamTotal,
+                perRoutine,
+                routineBreakdown,
+            };
         });
+
         teams.sort((a, b) => b.teamTotal - a.teamTotal);
         return teams;
-    }, [individualRanking, currentCat, rules.flow.teamTopN]);
+    }, [
+        individualRanking, currentCat, rules.flow.teamTopN,
+        catRules.hasTeam, catRules.teamMode,
+        catRules.teamPerRoutineMinAthletes, catRules.routineCount,
+    ]);
 
     // ── Formatlama yardımcıları ───────────────────────────────────────────
     const fmtScore = (val, status) => formatResultScore(val, status, '-');
@@ -232,13 +282,15 @@ export default function ResultsFinalPage() {
     // ── Excel ────────────────────────────────────────────────────────────
     function exportSingleToExcel() {
         if (!currentCat) return;
-        const headers = ['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam'];
+        const headers = showR2
+            ? ['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam']
+            : ['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'Toplam'];
         const rows = individualRanking.map(r => [
             r.rank ?? '—',
             r.a.pairName || getAthleteName(r.a),
             getAthleteClub(r.a) || r.a.club || '',
             fmtScore(r.r1, r.s1),
-            fmtScore(r.r2, r.s2),
+            ...(showR2 ? [fmtScore(r.r2, r.s2)] : []),
             r.rank != null ? r.total.toFixed(3) : '—',
         ]);
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -596,7 +648,7 @@ export default function ResultsFinalPage() {
                                             <th style={{ width: 56 }}>Sıra</th>
                                             <th>Ad Soyad / Kulüp</th>
                                             <th style={{ width: 130, textAlign: 'right' }}>R1</th>
-                                            <th style={{ width: 130, textAlign: 'right' }}>R2</th>
+                                            {showR2 && <th style={{ width: 130, textAlign: 'right' }}>R2</th>}
                                             <th style={{ width: 150, textAlign: 'right' }}>
                                                 {rule === 'max' ? 'GEÇERLİ PUAN' : 'TOPLAM'}
                                             </th>
@@ -605,7 +657,7 @@ export default function ResultsFinalPage() {
                                     <tbody>
                                         {individualRanking.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>
+                                                <td colSpan={showR2 ? 6 : 5} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>
                                                     {isSync
                                                         ? 'Henüz sonuç yok. Çift oluşturun ve puanlayın.'
                                                         : 'Henüz yayınlanmış sonuç yok.'}
@@ -656,6 +708,7 @@ export default function ResultsFinalPage() {
                                                             </div>
                                                         )}
                                                     </td>
+{showR2 && (
                                                     <td style={{ textAlign: 'right' }}>
                                                         <div style={{
                                                             fontFamily: "'Space Mono',monospace",
@@ -670,6 +723,7 @@ export default function ResultsFinalPage() {
                                                             </div>
                                                         )}
                                                     </td>
+)}
                                                     <td style={{ textAlign: 'right' }}>
                                                         <div style={{
                                                             fontFamily: "'Space Mono',monospace",

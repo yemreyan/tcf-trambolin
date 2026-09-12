@@ -27,7 +27,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import { getScoringRule, computeRoutineTotals } from '../lib/DataService';
-import { useRules } from '../lib/Rules';
+import { useRules, resolveCategoryRules } from '../lib/Rules';
 
 export default function CreateFinalsPage() {
     const navigate = useNavigate();
@@ -80,7 +80,7 @@ export default function CreateFinalsPage() {
             const filtered = Object.values(athletes).filter(a =>
                 (a.category === catId) || (a.categoryId === catId) || (a.catId === catId)
             );
-            const rule = getScoringRule(cat, rules.flow);
+            const rule = resolveCategoryRules(rules, cat).scoringRule;
             const ranked = filtered.map(a => {
                 const res = scores[a.uniqueId] || scores[a.id] || {};
                 // DNS/DNF → sıralama dışı; her iki serisi de geçersizse sporcu
