@@ -66,6 +66,17 @@ export const DEFAULT_RULES = {
             { keyword: 'büyük', min: 2 },
             { keyword: 'buyuk', min: 2 },
         ],
+        // Takım puanı sporcunun hangi serisinden alınır:
+        //  boş  → kategorinin kendi kuralı (sum: iki seri toplanır)
+        //  'max'→ sporcunun YALNIZCA en yüksek serisi sayılır; diğer serisi
+        //         listede üstü çizili görünür.
+        // Bireysel sıralamayı DEĞİŞTİRMEZ; yalnızca takım puanını etkiler.
+        teamScoringRuleByKeyword: [
+            { keyword: 'genç',  rule: 'max' },
+            { keyword: 'genc',  rule: 'max' },
+            { keyword: 'büyük', rule: 'max' },
+            { keyword: 'buyuk', rule: 'max' },
+        ],
         // Takım puanı nasıl hesaplanır:
         //  'athleteTotal' → en iyi N sporcunun GENEL toplamı (mevcut davranış)
         //  'perRoutine'   → her serinin en iyi N puanı ayrı ayrı toplanır
@@ -147,6 +158,7 @@ export const CATEGORY_RULE_FIELDS = {
     hasTeam:      { label: 'Takım sıralaması', hint: 'Kapalıysa bu kategori takım puanına girmez' },
     teamMode:     { label: 'Takım puanı yöntemi', hint: 'Sporcu toplamı mı, seri bazlı en iyiler mi' },
     teamTopN:     { label: 'Takım puanına sayılan sporcu', hint: 'En iyi kaç sporcunun puanı takım toplamına girer' },
+    teamScoringRule: { label: 'Takımda seri', hint: 'Sporcunun iki serisi toplanır mı, yoksa yalnızca en yüksek serisi mi sayılır' },
     teamMinAthletes: { label: 'Takım için en az sporcu', hint: 'Kulüpte bu kadar sporcu yoksa takım listesine girmez' },
     teamPerRoutineMinAthletes: { label: 'Seri bazlı için en az sporcu', hint: 'Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır' },
     finalTeamSource: { label: 'Finalde takım kaynağı', hint: 'Final kategorisinde takım puanı eleme mi finalden mi hesaplanır' },
@@ -182,6 +194,9 @@ export function resolveCategoryRules(rules, category) {
         teamMode:     pick('teamMode', flow.teamMode),
         teamTopN:
             Number(pick('teamTopN', resolveTeamTopN(category, flow))) || flow.teamTopN,
+        // Takımda seri kuralı — bireysel sıralamadan bağımsızdır.
+        teamScoringRule:
+            pick('teamScoringRule', resolveTeamScoringRule(category, flow) || scoringRule),
         teamMinAthletes:
             Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes,
         teamPerRoutineMinAthletes:
@@ -212,6 +227,20 @@ export function resolveTeamSourceCategory(rules, category, categories) {
     const parentId = category.parentCategoryId;
     const parent = parentId ? (categories?.[parentId] || null) : null;
     return parent || category;
+}
+
+/**
+ * Takımda seri kuralı — kategori adına göre. Eşleşme yoksa null döner ve
+ * kategorinin kendi seri kuralı (sum/max) geçerli olur.
+ */
+function resolveTeamScoringRule(category, flow) {
+    if (!category || category.type === 'sync') return null;
+    const name = String(category.name || '').toLowerCase();
+    for (const r of (flow.teamScoringRuleByKeyword || [])) {
+        const k = String(r?.keyword || '').toLowerCase();
+        if (k && name.includes(k)) return r.rule === 'max' ? 'max' : 'sum';
+    }
+    return null;
 }
 
 /**

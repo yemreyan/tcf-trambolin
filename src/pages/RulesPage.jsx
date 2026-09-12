@@ -199,6 +199,9 @@ export default function RulesPage() {
                     <KeywordMinField g="flow" k="teamTopNByKeyword" label="Kategoriye göre sayılan sporcu"
                         hint="Kategori adında anahtar kelime geçiyorsa takım puanı bu kadar sporcudan hesaplanır; sayıya girmeyenler listede üstü çizili görünür. Biçim: kelime=sayı, virgülle ayır."
                         valueKey="n" fallback={3} draft={draft} set={set} />
+                    <KeywordMinField g="flow" k="teamScoringRuleByKeyword" label="Kategoriye göre takımda seri"
+                        hint="max → sporcunun yalnızca en yüksek serisi takım puanına girer, diğer serisi üstü çizili görünür. Bireysel sıralamayı değiştirmez. Biçim: kelime=max, virgülle ayır."
+                        valueKey="rule" fallback="sum" text draft={draft} set={set} />
                     <NumField g="flow" k="teamMinAthletes" label="Takım için en az sporcu"
                         hint="Kulüpte bu kadar sporcu yoksa takım listesine hiç girmez"
                         min={1} max={10} step={1} draft={draft} set={set} />
@@ -254,6 +257,7 @@ export default function RulesPage() {
                                         <th style={catTh}>TAKIM</th>
                                         <th style={catTh}>TAKIM YÖNTEMİ</th>
                                         <th style={catTh}>SAYILAN SPORCU</th>
+                                        <th style={catTh}>TAKIMDA SERİ</th>
                                         <th style={catTh}>EN AZ SPORCU</th>
                                         <th style={catTh}>FİNALDE TAKIM</th>
                                     </tr>
@@ -285,6 +289,8 @@ export default function RulesPage() {
                                                     options={[['athleteTotal', 'Sporcu toplamı'], ['perRoutine', 'Seri bazlı']]} toast={toast} />
                                                 <CatCell compId={compId} catId={cat.id} k="teamTopN" own={own} eff={eff.teamTopN}
                                                     options={[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']]} numeric toast={toast} />
+                                                <CatCell compId={compId} catId={cat.id} k="teamScoringRule" own={own} eff={eff.teamScoringRule}
+                                                    options={[['sum', 'Toplam'], ['max', 'En yüksek seri']]} toast={toast} />
                                                 <CatCell compId={compId} catId={cat.id} k="teamMinAthletes" own={own} eff={eff.teamMinAthletes}
                                                     options={[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']]} numeric toast={toast} />
                                                 <CatCell compId={compId} catId={cat.id} k="finalTeamSource" own={own} eff={eff.finalTeamSource}
@@ -456,7 +462,7 @@ function BoolField({ g, k, label, hint, draft, set }) {
 }
 
 /** "kelime=sayı" çiftleri. Örn: "genç=2, büyük=2" */
-function KeywordMinField({ g, k, label, hint, draft, set, valueKey = 'min', fallback = 3 }) {
+function KeywordMinField({ g, k, label, hint, draft, set, valueKey = 'min', fallback = 3, text = false }) {
     const value = draft[g][k] || [];
     const changed = isChanged(g, k, value);
     const [raw, setRaw] = useState(null);
@@ -465,7 +471,8 @@ function KeywordMinField({ g, k, label, hint, draft, set, valueKey = 'min', fall
 
     const parse = (str) => str.split(',').map(p => p.trim()).filter(Boolean).map(p => {
         const [kw, mn] = p.split('=');
-        return { keyword: (kw || '').trim(), [valueKey]: Number(mn) || fallback };
+        const v = (mn || '').trim();
+        return { keyword: (kw || '').trim(), [valueKey]: text ? (v || fallback) : (Number(v) || fallback) };
     }).filter(x => x.keyword);
 
     return (

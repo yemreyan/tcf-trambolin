@@ -490,12 +490,32 @@ export function computeTeamRanking(rows, o = {}) {
     // 2 puanlı kulüp "3 sporcu" görünüp takım listesine giriyordu.
     const scoredOf = (rs) => rs.filter(r => r.r1 != null || r.r2 != null);
 
+    // Sporcunun en yüksek tek serisi (2. seri yoksa 1. seri).
+    const bestRoutineOf = (r) => {
+        const a = r.r1 ?? null;
+        const b = routineCount >= 2 ? (r.r2 ?? null) : null;
+        if (a == null && b == null) return null;
+        if (a == null) return b;
+        if (b == null) return a;
+        return Math.max(a, b);
+    };
+
+    // Takıma kimin gireceği hangi puana göre belirlenir:
+    //  'max' → sporcunun en yüksek TEK serisi (bireysel toplamdan bağımsız)
+    //  'sum' → satırın toplamı (kategorinin kendi kuralı)
+    // Genç/Büyük'te bireysel sıralama toplamla yapılsa bile takım en yüksek
+    // seriden hesaplandığı için bu ayrım gerekli.
+    const selScoreOf = (r) => {
+        const v = rule === 'max' ? bestRoutineOf(r) : r.total;
+        return v == null ? -Infinity : v;
+    };
+
     const teams = Object.entries(byClub)
         .filter(([, rs]) => scoredOf(rs).length >= minAthletes)
         .map(([club, all]) => {
             // Hesap ve gösterim yalnızca puanlı sporcular üzerinden
             const rs = scoredOf(all);
-            const byTotal = [...rs].sort((a, b) => b.total - a.total);
+            const byTotal = [...rs].sort((a, b) => selScoreOf(b) - selScoreOf(a));
 
             const perRoutine =
                 o.mode === 'perRoutine' &&
@@ -522,9 +542,11 @@ export function computeTeamRanking(rows, o = {}) {
             } else {
                 const contributors = byTotal.slice(0, topN);
                 if (rule === 'max') {
-                    // Sporcunun yalnızca İYİ olan serisi sayılır
+                    // Sporcunun yalnızca EN YÜKSEK serisi sayılır; diğer serisi
+                    // listede kalır ama üstü çizili olur ve toplama girmez.
                     contributors.forEach(r => {
-                        const a = r.r1 ?? null, b = r.r2 ?? null;
+                        const a = r.r1 ?? null;
+                        const b = routineCount >= 2 ? (r.r2 ?? null) : null;
                         if (a == null && b == null) return;
                         const useR1 = b == null || (a != null && a >= b);
                         countedIn[useR1 ? 'r1' : 'r2'].add(r);

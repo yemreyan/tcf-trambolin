@@ -265,7 +265,7 @@ export default function ResultsFinalPage() {
             mode: teamCr.teamMode,
             perRoutineMinAthletes: teamCr.teamPerRoutineMinAthletes,
             routineCount: teamCr.routineCount,
-            scoringRule: teamCr.scoringRule,
+            scoringRule: teamCr.teamScoringRule,
         });
     }, [
         individualRanking, currentCat, categories, athletes, pairs, scores,
@@ -478,14 +478,16 @@ export default function ResultsFinalPage() {
                 mode: tcr.teamMode,
                 perRoutineMinAthletes: tcr.teamPerRoutineMinAthletes,
                 routineCount: tcr.routineCount,
-                scoringRule: tcr.scoringRule,
+                scoringRule: tcr.teamScoringRule,
             });
             if (teams.length === 0) return;
 
             const teamNote = (teams[0].perRoutine
                 ? `Takım puanı = her serinin en iyi ${tcr.teamTopN} puanı toplanır · en az ${tcr.teamMinAthletes} sporcu`
-                : `Takım puanı = en iyi ${tcr.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
-                + ' · Üstü çizili sporcular puana sayılmaz'
+                : tcr.teamScoringRule === 'max'
+                    ? `Takım puanı = en iyi ${tcr.teamTopN} sporcunun EN YÜKSEK serisi · en az ${tcr.teamMinAthletes} sporcu`
+                    : `Takım puanı = en iyi ${tcr.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
+                + ' · Üstü çizili puanlar takım toplamına girmez'
                 + (fromQual ? ` · Kaynak: ${srcCat.name} (eleme) sonuçları` : '');
 
             const teamTable = `

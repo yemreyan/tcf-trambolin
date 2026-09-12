@@ -160,7 +160,7 @@ export default function ResultsLivePage() {
                     mode: cr.teamMode,
                     perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
                     routineCount: cr.routineCount,
-                    scoringRule: cr.scoringRule,
+                    scoringRule: cr.teamScoringRule,
                 });
                 // Takım kartları bireysel satırlardan yüksek; TV'de taşmasın
                 // diye sayfalanır.
@@ -306,7 +306,7 @@ export default function ResultsLivePage() {
             mode: cr.teamMode,
             perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
             routineCount: cr.routineCount,
-            scoringRule: cr.scoringRule,
+            scoringRule: cr.teamScoringRule,
         });
         const st = currentView.page * TEAMS_PER_PAGE;
         return all.slice(st, st + TEAMS_PER_PAGE);
