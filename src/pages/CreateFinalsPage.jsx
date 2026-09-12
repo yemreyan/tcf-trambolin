@@ -5,7 +5,11 @@
  * Mantık:
  *   - Her kategoride sporcular r1+r2 toplamına göre (veya senior için max) sıralanır.
  *   - İlk 8 finalist, 9-10 yedek seçilir.
- *   - Finalistler A grubu (1-4) ve B grubu (5-8) olarak ikiye bölünür, her grup shuffle edilir.
+ *   - Çıkış sırası TERS kurulur: elemede 5-8. sıradakiler ÖNCE (çıkış 1-4),
+ *     elemede 1-4. sıradakiler SONRA (çıkış 5-8) yarışır. Her grup kendi
+ *     içinde shuffle edilir; yani en iyi dört sporcu 5-8 arasında rastgele,
+ *     diğer dördü 1-4 arasında rastgele yerleşir.
+ *   - Yedekler (R1, R2) çıkış sırasının sonunda 9 ve 10. sırada yer alır.
  *   - Yeni kategori {catId}_final olarak oluşturulur, finalist sporcular
  *     YENİ bir id ({origId}_final) ile eklenir (isReserve=true ise yedek).
  *     Orijinal id `originalId` alanında saklanır.
@@ -98,8 +102,8 @@ export default function CreateFinalsPage() {
                 return;
             }
 
-            // A ve B gruplarını karıştır
-            // Finalist sayısı kuraldan geldiği için gruplar ortadan bölünür
+            // Gruplar: A = elemede üst yarı (1-4), B = alt yarı (5-8).
+            // Finalist sayısı kuraldan geldiği için gruplar ortadan bölünür.
             const half = Math.ceil(finalists.length / 2);
             const groupA = finalists.slice(0, half).map(x => x.a);
             const groupB = finalists.slice(half).map(x => x.a);
@@ -111,7 +115,9 @@ export default function CreateFinalsPage() {
             };
             shuffle(groupA); shuffle(groupB);
 
-            const orderedAthletes = [...groupA, ...groupB];
+            // Çıkış sırası TERS: önce alt yarı (B → çıkış 1-4), sonra üst yarı
+            // (A → çıkış 5-8). Böylece elemenin en iyi dördü en sonda yarışır.
+            const orderedAthletes = [...groupB, ...groupA];
 
             const updates = {};
 
@@ -133,7 +139,8 @@ export default function CreateFinalsPage() {
                     ...a, id: newUid, uniqueId: newUid, originalId: a.id,
                     category: finalId, categoryId: finalId, catId: finalId,
                     isFinalist: true, isReserve: true,
-                    startOrder: 100 + idx,
+                    // Yedekler finalistlerin ardından: 9 ve 10. sıra
+                    startOrder: orderedAthletes.length + idx + 1,
                 };
                 orderIds.push(newUid);
             });
@@ -248,7 +255,9 @@ export default function CreateFinalsPage() {
                     <div className="card-header">
                         <h3 className="card-title">Kategoriler</h3>
                         <div className="text-muted" style={{ marginTop: 4, fontSize: '0.85rem' }}>
-                            İlk 8 finalist, 9-10 yedek olarak yerleştirilir. Finalistler A (1-4) ve B (5-8) gruplarına shuffle edilir.
+                            İlk 8 finalist, 9-10 yedek olarak yerleştirilir. Çıkış sırası ters kurulur:
+                            elemede 5-8. sıradakiler 1-4 arasında, 1-4. sıradakiler 5-8 arasında rastgele
+                            yerleşir. Yedekler (R1, R2) 9 ve 10. sırada yarışır.
                         </div>
                     </div>
                     <div className="card-body" style={{ padding: 0 }}>
