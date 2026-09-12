@@ -23,7 +23,10 @@ import * as XLSX from 'xlsx';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { getScoringRule, getAthleteName, getAthleteClub } from '../lib/DataService';
+import {
+    getScoringRule, getAthleteName, getAthleteClub,
+    isDNX, formatResultScore, computeRoutineTotals,
+} from '../lib/DataService';
 
 export default function ResultsFinalPage() {
     const navigate  = useNavigate();
@@ -121,11 +124,8 @@ export default function ResultsFinalPage() {
                         || {};
                     const r1d = res.r1 || null;
                     const r2d = res.r2 || null;
-                    const r1 = r1d?.total ?? null;
-                    const r2 = r2d?.total ?? null;
-                    let total = 0;
-                    if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                    else total = (r1 || 0) + (r2 || 0);
+                    // DNS/DNF → sıralama dışı (null)
+                    const { r1, r2, total } = computeRoutineTotals(r1d, r2d, rule);
                     rows.push({
                         a: {
                             id: pair.id,
@@ -144,11 +144,8 @@ export default function ResultsFinalPage() {
                     const res = scores[a.uniqueId] || scores[a.id] || {};
                     const r1d = res.r1 || null;
                     const r2d = res.r2 || null;
-                    const r1 = r1d?.total ?? null;
-                    const r2 = r2d?.total ?? null;
-                    let total = 0;
-                    if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                    else total = (r1 || 0) + (r2 || 0);
+                    // DNS/DNF → sıralama dışı (null)
+                    const { r1, r2, total } = computeRoutineTotals(r1d, r2d, rule);
                     rows.push({
                         a, r1, r2, total,
                         r1d, r2d,
@@ -164,11 +161,8 @@ export default function ResultsFinalPage() {
                 const res = scores[a.uniqueId] || scores[a.id] || {};
                 const r1d = res.r1 || null;
                 const r2d = res.r2 || null;
-                const r1 = r1d?.total ?? null;
-                const r2 = r2d?.total ?? null;
-                let total = 0;
-                if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                else total = (r1 || 0) + (r2 || 0);
+                // DNS/DNF → sıralama dışı (null)
+                const { r1, r2, total } = computeRoutineTotals(r1d, r2d, rule);
                 rows.push({
                     a, r1, r2, total,
                     r1d, r2d,
@@ -211,15 +205,10 @@ export default function ResultsFinalPage() {
     }, [individualRanking, currentCat]);
 
     // ── Formatlama yardımcıları ───────────────────────────────────────────
-    function fmtScore(val, status) {
-        if (status === 'dns') return 'DNS';
-        if (status === 'dnf') return 'DNF';
-        if (val == null) return '-';
-        return Number(val).toFixed(3);
-    }
+    const fmtScore = (val, status) => formatResultScore(val, status, '-');
 
     function fmtDetail(rd) {
-        if (!rd || rd.status === 'dns' || rd.status === 'dnf') return null;
+        if (!rd || isDNX(rd.status)) return null;
         const parts = [];
         if (rd.d != null) parts.push(`D:${Number(rd.d).toFixed(1)}`);
         if (rd.e != null) parts.push(`E:${Number(rd.e).toFixed(2)}`);
@@ -269,36 +258,41 @@ export default function ResultsFinalPage() {
                         seen.add(a.pairId);
                         const pair = pairsById[a.pairId];
                         const res = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
-                        const r1 = res.r1?.total ?? null;
-                        const r2 = res.r2?.total ?? null;
-                        const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
-                        rows.push({ name: pair.displayName, club: pair.club || a.club || '', r1, r2, total: tot });
+                        // DNS/DNF → sıralama dışı (null)
+                        const { r1, r2, total: tot } = computeRoutineTotals(res.r1, res.r2, r);
+                        rows.push({ name: pair.displayName, club: pair.club || a.club || '', r1, r2, total: tot, s1: res.r1?.status, s2: res.r2?.status });
                     } else {
                         const res = scores[a.uniqueId] || scores[a.id] || {};
-                        const r1 = res.r1?.total ?? null;
-                        const r2 = res.r2?.total ?? null;
-                        const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
-                        rows.push({ name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot });
+                        const { r1, r2, total: tot } = computeRoutineTotals(res.r1, res.r2, r);
+                        rows.push({ name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot, s1: res.r1?.status, s2: res.r2?.status });
                     }
                 });
             } else {
                 catAths.forEach(a => {
                     const res = scores[a.uniqueId] || scores[a.id] || {};
-                    const r1 = res.r1?.total ?? null;
-                    const r2 = res.r2?.total ?? null;
-                    const tot = r === 'max' ? Math.max(r1 || 0, r2 || 0) : ((r1 || 0) + (r2 || 0));
-                    rows.push({ name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot });
+                    const { r1, r2, total: tot } = computeRoutineTotals(res.r1, res.r2, r);
+                    rows.push({ name: getAthleteName(a), club: getAthleteClub(a), r1, r2, total: tot, s1: res.r1?.status, s2: res.r2?.status });
                 });
             }
 
-            rows.sort((x, y) => y.total - x.total);
-            rows.forEach((x, i) => aoa.push([
-                i + 1,
+            // Ekran tablosuyla aynı sıralama: puanlılar üstte (eşitler aynı derece),
+            // puansızlar altta derecesiz.
+            const scored   = rows.filter(x => x.r1 != null || x.r2 != null).sort((x, y) => y.total - x.total);
+            const unscored = rows.filter(x => x.r1 == null && x.r2 == null);
+            let lastTotal = null, lastRank = 0;
+            scored.forEach((x, i) => {
+                if (lastTotal !== null && x.total === lastTotal) x.rank = lastRank;
+                else { x.rank = i + 1; lastRank = x.rank; lastTotal = x.total; }
+            });
+            unscored.forEach(x => { x.rank = null; });
+
+            [...scored, ...unscored].forEach(x => aoa.push([
+                x.rank ?? '—',
                 x.name,
                 x.club,
-                x.r1?.toFixed(3) || '-',
-                x.r2?.toFixed(3) || '-',
-                x.total.toFixed(3),
+                fmtScore(x.r1, x.s1),
+                fmtScore(x.r2, x.s2),
+                x.rank == null ? '—' : x.total.toFixed(3),
             ]));
             if (aoa.length > 1) {
                 const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -336,15 +330,13 @@ export default function ResultsFinalPage() {
                         const res  = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
                         const r1d  = res.r1 || null;
                         const r2d  = res.r2 || null;
-                        const v1   = r1d?.total ?? null;
-                        const v2   = r2d?.total ?? null;
-                        const tot  = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                        // DNS/DNF → sıralama dışı (null)
+                        const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
                         rows.push({ name: pair.displayName || '—', club: pair.club || a.club || '', v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
                     } else {
                         const res = scores[a.uniqueId] || scores[a.id] || {};
                         const r1d = res.r1 || null; const r2d = res.r2 || null;
-                        const v1  = r1d?.total ?? null; const v2 = r2d?.total ?? null;
-                        const tot = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                        const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
                         rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
                     }
                 });
@@ -352,8 +344,7 @@ export default function ResultsFinalPage() {
                 catAths.forEach(a => {
                     const res = scores[a.uniqueId] || scores[a.id] || {};
                     const r1d = res.r1 || null; const r2d = res.r2 || null;
-                    const v1  = r1d?.total ?? null; const v2 = r2d?.total ?? null;
-                    const tot = r === 'max' ? Math.max(v1 || 0, v2 || 0) : (v1 || 0) + (v2 || 0);
+                    const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
                     rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
                 });
             }
@@ -369,13 +360,7 @@ export default function ResultsFinalPage() {
             return [...scored, ...unscored];
         }
 
-        function fmtP(val, status) {
-            const s = (status || '').toUpperCase();
-            if (s === 'DNS') return 'DNS';
-            if (s === 'DNF') return 'DNF';
-            if (val == null) return '-';
-            return Number(val).toFixed(3);
-        }
+        const fmtP = (val, status) => formatResultScore(val, status, '-');
 
         function medalEmoji(rank) {
             if (rank === 1) return '🥇';

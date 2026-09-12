@@ -22,7 +22,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { getScoringRule, getAthleteName, getAthleteClub } from '../lib/DataService';
+import {
+    getScoringRule, getAthleteName, getAthleteClub,
+    isDNX, formatResultScore, computeRoutineTotals,
+} from '../lib/DataService';
 
 const ATHLETES_PER_PAGE = 10;
 const CYCLE_MS = 8000;
@@ -180,11 +183,7 @@ export default function ResultsLivePage() {
                     const s1 = res.r1?.status;
                     const s2 = res.r2?.status;
                     // DNS/DNF → sıralama dışı (null)
-                    const r1 = isDNX(s1) ? null : (res.r1?.total ?? null);
-                    const r2 = isDNX(s2) ? null : (res.r2?.total ?? null);
-                    let total = 0;
-                    if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                    else total = (r1 || 0) + (r2 || 0);
+                    const { r1, r2, total } = computeRoutineTotals(res.r1, res.r2, rule);
                     rows.push({
                         a: {
                             id: pair.id,
@@ -201,11 +200,7 @@ export default function ResultsLivePage() {
                     const res = scores[a.uniqueId] || scores[a.id] || {};
                     const s1 = res.r1?.status;
                     const s2 = res.r2?.status;
-                    const r1 = isDNX(s1) ? null : (res.r1?.total ?? null);
-                    const r2 = isDNX(s2) ? null : (res.r2?.total ?? null);
-                    let total = 0;
-                    if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-                    else total = (r1 || 0) + (r2 || 0);
+                    const { r1, r2, total } = computeRoutineTotals(res.r1, res.r2, rule);
                     rows.push({ a, r1, r2, s1, s2, total });
                 }
             });
@@ -218,11 +213,7 @@ export default function ResultsLivePage() {
             const s1  = res.r1?.status;
             const s2  = res.r2?.status;
             // DNS/DNF → sıralama dışı (null)
-            const r1  = isDNX(s1) ? null : (res.r1?.total ?? null);
-            const r2  = isDNX(s2) ? null : (res.r2?.total ?? null);
-            let total = 0;
-            if (rule === 'max') total = Math.max(r1 || 0, r2 || 0);
-            else total = (r1 || 0) + (r2 || 0);
+            const { r1, r2, total } = computeRoutineTotals(res.r1, res.r2, rule);
             return { a, r1, r2, s1, s2, total };
         });
         return assignRanks(rows);
@@ -251,18 +242,7 @@ export default function ResultsLivePage() {
         return [...scored, ...unscored];
     }
 
-    function isDNX(status) {
-        const s = (status || '').toUpperCase();
-        return s === 'DNS' || s === 'DNF';
-    }
-
-    function fmtScore(val, status) {
-        const s = (status || '').toUpperCase();
-        if (s === 'DNS') return 'DNS';
-        if (s === 'DNF') return 'DNF';
-        if (val == null) return '—';
-        return Number(val).toFixed(3);
-    }
+    const fmtScore = (val, status) => formatResultScore(val, status, '—');
 
     function toggleFullscreen() {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen();
