@@ -2,12 +2,16 @@
  * PasswordGate.jsx
  * Mevcut auth.js showGate() görsel tasarımını React'e taşır.
  * Hakem / CJP ekranlarında tam ekran şifre kapısı olarak kullanılır.
+ *
+ * Varsayılan olarak yarışma/panel/rol şifresini doğrular. `verify` prop'u
+ * verilirse onun yerine o fonksiyon çağrılır (ör. Admin Araçları'nın
+ * süper admin kapısı) — böylece kapı görseli tek yerde kalır.
  */
 
 import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 
-export default function PasswordGate({ compId, panel, role, onUnlock, label }) {
+export default function PasswordGate({ compId, panel, role, onUnlock, label, verify }) {
     const { verifyJudgePassword } = useAuth();
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,11 +22,13 @@ export default function PasswordGate({ compId, panel, role, onUnlock, label }) {
         setLoading(true);
         setError('');
 
-        const ok = await verifyJudgePassword(compId, panel, role, password.trim());
+        const ok = verify
+            ? await verify(password.trim())
+            : await verifyJudgePassword(compId, panel, role, password.trim());
         setLoading(false);
 
         if (ok) {
-            onUnlock();
+            onUnlock?.();
         } else {
             setError('Yanlış şifre. Lütfen tekrar deneyin.');
             setPassword('');

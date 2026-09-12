@@ -3,6 +3,10 @@
  * Mevcut admin_tools.html — Yarışma yönetimi, arşivleme,
  * klonlama, silme, kategori ID normalizasyonu.
  *
+ * ERİŞİM: Süper admin şifre kapısının arkasındadır. Sayfa tek bir yarışmaya
+ * bağlı olmadığı ve geri alınamaz silme işlemi içerdiği için yarışma admin
+ * şifresi değil master şifre istenir.
+ *
  * Firebase yolları aynen korundu:
  *   competitions
  *   competitions/{id}
@@ -13,18 +17,22 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, get, update, remove, set } from 'firebase/database';
 import { db } from '../lib/firebase';
+import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import { Utils, standardizeId } from '../lib/DataService';
+import PasswordGate from '../components/PasswordGate';
 
 export default function AdminToolsPage() {
     const navigate = useNavigate();
+    const { isSuperAdmin, verifySuperAdmin, clearSuperAdmin } = useAuth();
     const { toast, confirm, prompt } = useNotification();
 
     const [competitions, setCompetitions] = useState([]);
     const [filter, setFilter] = useState('all'); // all | active | archived
     const [catModalCompId, setCatModalCompId] = useState(null);
 
-    useEffect(() => { load(); }, []);
+    // Kapı açılmadan yarışma listesi çekilmez
+    useEffect(() => { if (isSuperAdmin) load(); }, [isSuperAdmin]);
 
     async function load() {
         const snap = await get(ref(db, 'competitions'));
@@ -131,6 +139,16 @@ export default function AdminToolsPage() {
     // ── Modal: Kategori listesi ───────────────────────────────────────────
     const modalComp = catModalCompId ? competitions.find(c => c.id === catModalCompId) : null;
 
+    // ── Şifre kapısı ──────────────────────────────────────────────────────
+    if (!isSuperAdmin) {
+        return (
+            <PasswordGate
+                verify={verifySuperAdmin}
+                label="ADMİN ARAÇLARI — SÜPER ADMİN"
+            />
+        );
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <nav className="topnav">
@@ -138,10 +156,16 @@ export default function AdminToolsPage() {
                     <div className="brand-title">TCF</div>
                     <div className="brand-subtitle">ADMIN ARAÇLARI</div>
                 </div>
-                <button className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}
-                    onClick={() => navigate('/')}>
-                    <i className="material-icons-round">home</i> Ana Sayfa
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5' }}
+                        onClick={() => { clearSuperAdmin(); toast('Admin araçları kilitlendi', 'info'); }}>
+                        <i className="material-icons-round">lock</i> Kilitle
+                    </button>
+                    <button className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}
+                        onClick={() => navigate('/')}>
+                        <i className="material-icons-round">home</i> Ana Sayfa
+                    </button>
+                </div>
             </nav>
 
             <div className="container">

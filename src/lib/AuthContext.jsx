@@ -12,6 +12,7 @@ import { db } from './firebase';
 
 const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 dakika
 const SESSION_KEY = 'judge_auth_session';
+const SUPER_SESSION_KEY = 'super_admin_session';
 const SUPER_ADMIN_PASS = '63352180';
 
 const AuthContext = createContext(null);
@@ -20,6 +21,26 @@ export function AuthProvider({ children }) {
     const [adminCompId, setAdminCompId] = useState(null); // Hangi yarışma admin olarak açık
     const inactivityTimer = useRef(null);
     const activityListenersAdded = useRef(false);
+
+    // ── Süper Admin (yarışmadan bağımsız yıkıcı işlemler) ─────────────────
+    // Admin Araçları yarışma silme / klonlama gibi geri alınamaz işlemler
+    // içerdiği ve tek bir yarışmaya bağlı olmadığı için yarışma şifresiyle
+    // değil master şifreyle açılır. Oturum sekme kapanınca düşer.
+    const [isSuperAdmin, setIsSuperAdmin] = useState(() => {
+        try { return sessionStorage.getItem(SUPER_SESSION_KEY) === '1'; } catch { return false; }
+    });
+
+    const verifySuperAdmin = useCallback((password) => {
+        if (password !== SUPER_ADMIN_PASS) return false;
+        setIsSuperAdmin(true);
+        try { sessionStorage.setItem(SUPER_SESSION_KEY, '1'); } catch {}
+        return true;
+    }, []);
+
+    const clearSuperAdmin = useCallback(() => {
+        setIsSuperAdmin(false);
+        try { sessionStorage.removeItem(SUPER_SESSION_KEY); } catch {}
+    }, []);
 
     // ── Admin (index → panel) ──────────────────────────────────────────────
     /**
@@ -143,6 +164,10 @@ export function AuthProvider({ children }) {
             verifyAdmin,
             getActiveCompId,
             clearActiveComp,
+            // Süper admin
+            isSuperAdmin,
+            verifySuperAdmin,
+            clearSuperAdmin,
             // Judge gate
             checkJudgeAccess,
             verifyJudgePassword,
