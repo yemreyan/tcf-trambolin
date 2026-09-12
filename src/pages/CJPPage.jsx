@@ -167,11 +167,19 @@ export default function CJPPage() {
     // Sync mi? — eScore hesabından ÖNCE belirlenmeli (base değerini etkiler)
     const isSync = selected?.catType === 'sync';
 
+    // judgesData panelin SAHADAKİ sporcusuna aittir (callToField DB'de siler).
+    // Eskiden sporcu seçilince yerel kopya siliniyordu; dinleyici yalnızca veri
+    // DEĞİŞİNCE tetiklendiği için notlar ekrandan uçuyor ve bir daha gelmiyordu
+    // (yayınlanırsa E skoru kesintisiz, yani yanlış yayınlanıyordu).
+    // Artık kopya hiç silinmiyor; sahadaki sporcu seçili değilken kullanılmıyor.
+    const isSelectedOnField = !!selected && liveActiveAthId === selected.uniqueId;
+    const activeJudges = isSelectedOnField ? judgesData : {};
+
     // Bireysel: base 20, Senkron: base 10
-    const eScore = calcEScore(judgesData, elementCount, isSync);
+    const eScore = calcEScore(activeJudges, elementCount, isSync);
 
     // D: önce D hakeminden oku, yoksa manuel girişi kullan
-    const dFromJudge = getDScoreFromJudge(judgesData);
+    const dFromJudge = getDScoreFromJudge(activeJudges);
     const dVal = dFromJudge !== null ? dFromJudge : (parseFloat(dInput) || 0);
 
     const tVal   = parseFloat(inpT)  || 0;
@@ -325,7 +333,6 @@ export default function CJPPage() {
         setCurrentStatus(null);
         setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
         setDInput('');
-        setJudgesData({});   // Eski sporcunun hakem puanlarını temizle
         setElementCount(10);
         setActiveRoutine(1);
 
@@ -393,7 +400,7 @@ export default function CJPPage() {
     useEffect(() => {
         if (!selected || !compId || isLocked) return;
         const hasStarted =
-            Object.keys(judgesData).length > 0 ||
+            Object.keys(activeJudges).length > 0 ||
             dVal > 0 || tVal > 0 || h1Val > 0 || h2Val > 0 || sVal > 0 || pVal > 0 || dpVal > 0 || currentStatus;
         if (!hasStarted) return;
 
@@ -420,7 +427,7 @@ export default function CJPPage() {
         };
         // scores/preview → sadece CJP kendi önizlemesi için (scoreboard okumaz)
         set(ref(db, `live/${compId}/panels/${currentPanel}/scores/preview`), previewData).catch(() => {});
-    }, [judgesData, inpT, inpH, inpH2, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
+    }, [activeJudges, inpT, inpH, inpH2, inpS, inpP, inpDp, dInput, currentStatus, elementCount]);
 
     // ── Eleman sayısı değişince hakem ekranlarına anında yansıt ───────────
     // Hakem kaç kutu göreceğini buradan okur; sporcu sahadayken HAREKET
@@ -511,7 +518,7 @@ export default function CJPPage() {
                 dp: dpVal,
                 total: parseFloat(totalScore.toFixed(3)),
                 status: 'published',
-                judges: judgesData,
+                judges: activeJudges,
                 elementCount,
             });
             // Flash ekranına bildir (ResultsLivePage dinler)
@@ -536,7 +543,7 @@ export default function CJPPage() {
                 timestamp: Date.now(),
             });
             // Scoreboard için panel-spesifik yola da yaz (scores/current = yalnızca yayınlanan)
-            const elDeds = calcElementDeductions(judgesData, elementCount);
+            const elDeds = calcElementDeductions(activeJudges, elementCount);
             await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), {
                 athleteName: displayLabel,
                 club: getAthleteClub(selected),
@@ -592,7 +599,8 @@ export default function CJPPage() {
     function resetScores() {
         setInpT(''); setInpH(''); setInpH2(''); setInpS(''); setInpP(''); setInpDp('');
         setDInput('');
-        setJudgesData({});
+        // judgesData'ya dokunulmaz — Firebase'in aynası. Tek hakemi iptal
+        // etmek için hakem rozetleri, hepsini için "Sahaya Çağır" kullanılır.
         setCurrentStatus(null);
         setIsLocked(false);
     }
@@ -846,7 +854,7 @@ export default function CJPPage() {
                                 Tıklanınca sadece o hakemin notu iptal edilir. */}
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12, flexWrap: 'wrap' }}>
                                 {['e1','e2','e3','e4','e5','e6'].map(jId => {
-                                    const j = judgesData[jId];
+                                    const j = activeJudges[jId];
                                     const submitted = j?.submitted === true;
                                     const hasData   = j && (j.deductions || j.scores);
                                     const active    = submitted || hasData;
@@ -876,7 +884,7 @@ export default function CJPPage() {
                                 })}
                             </div>
                             {/* Tüm hakemler gönderdi bildirimi */}
-                            {['e1','e2','e3','e4','e5','e6'].every(jId => judgesData[jId]?.submitted) && (
+                            {['e1','e2','e3','e4','e5','e6'].every(jId => activeJudges[jId]?.submitted) && (
                                 <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#10b981', fontWeight: 700, letterSpacing: 1 }}>
                                     ✓ TÜM HAKEMLER GÖNDERDİ
                                 </div>
@@ -1049,8 +1057,8 @@ export default function CJPPage() {
                 </div>
 
                 {/* Hakem Analiz Tablosu — HUD'un altında, tam genişlik */}
-                {Object.keys(judgesData).some(k => k.startsWith('e') && judgesData[k]?.deductions) && (
-                    <JudgeAnalysisTable judgesData={judgesData} elementCount={elementCount} />
+                {Object.keys(activeJudges).some(k => k.startsWith('e') && activeJudges[k]?.deductions) && (
+                    <JudgeAnalysisTable judgesData={activeJudges} elementCount={elementCount} />
                 )}
             </div>
 
