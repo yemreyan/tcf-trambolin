@@ -40,7 +40,7 @@ export const DEFAULT_RULES = {
         defaultScoringRule: 'sum',      // 'sum' (R1+R2) | 'max' (en iyisi)
         routineCount: 2,                // kategori başına seri sayısı (1 veya 2)
         hasDScore: true,                // zorluk (D) puanı kullanılıyor mu
-        hasTeam: true,                  // takım sıralamasına giriyor mu
+        hasTeam: true,                  // takım sıralamasına giriyor mu (senkron hariç)
         maxRuleKeywords: ['buyuk', 'büyük', '17+', '17_yas', 'senior', 'buyukler', 'büyükler', '21+'],
         finalistCount: 8,
         reserveCount: 2,
@@ -158,7 +158,9 @@ export function resolveCategoryRules(rules, category) {
         scoringRule,
         routineCount: Number(pick('routineCount', flow.routineCount)) || flow.routineCount,
         hasDScore:    pick('hasDScore', flow.hasDScore) !== false,
-        hasTeam:      pick('hasTeam', flow.hasTeam) !== false,
+        // Senkron kategorilerde takım sıralaması yapılmaz. Kategoride açıkça
+        // aksi belirtilmediyse kapalıdır.
+        hasTeam:      pick('hasTeam', category?.type === 'sync' ? false : flow.hasTeam) !== false,
         teamMode:     pick('teamMode', flow.teamMode),
         teamMinAthletes:
             Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes,
