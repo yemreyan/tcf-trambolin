@@ -18,8 +18,9 @@ import { useNotification } from '../lib/NotificationContext';
 
 const ROLES = [
     { id: 'cjp', name: 'CJP', color: '#f43f5e' },
-    { id: 'd1',  name: 'D1',  color: '#fbbf24' },
-    { id: 'd2',  name: 'D2',  color: '#fbbf24' },
+    // Tek zorluk hakemi. Anahtar 'd1' olarak korundu (mevcut kayıtlar bozulmasın),
+    // hakem ekranı ve şifre ekranı ise tek 'd' hakemi varsayıyor.
+    { id: 'd1',  name: 'D',   color: '#fbbf24' },
     { id: 'e1',  name: 'E1',  color: '#3b82f6' },
     { id: 'e2',  name: 'E2',  color: '#3b82f6' },
     { id: 'e3',  name: 'E3',  color: '#3b82f6' },
@@ -171,7 +172,7 @@ export default function JuryPage() {
     const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}` : '';
     const judgeLinks = ROLES.map(r => {
         const role = r.id === 'cjp' ? 'cjp' : (r.id.startsWith('d') ? 'judge-d' : 'judge-e');
-        const idPart = r.id.startsWith('e') ? r.id.slice(1) : '';
+        const idPart = r.id.startsWith('e') ? r.id.slice(1) : '1';
         const path = r.id === 'cjp'
             ? `/cjp?comp=${compId}&panel=${activePanelId || ''}`
             : `/judge-cockpit?comp=${compId}&role=${role}&id=${idPart}&panel=${activePanelId || ''}`;

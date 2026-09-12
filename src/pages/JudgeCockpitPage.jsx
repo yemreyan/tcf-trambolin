@@ -147,8 +147,9 @@ export default function JudgeCockpitPage() {
             ref(db, `competitions/${compId}/juryPanels/${panel}/members`),
             snap => {
                 const m = snap.val() || {};
-                // D hakeminde jüri listesi d1/d2 tutuyor ama ekran anahtarı 'd'
-                const raw = isD ? (m[`d${judgeN}`] ?? m.d1 ?? m.d) : m[judgeKey];
+                // Tek D hakemi var; jüri listesinde anahtarı 'd1', ekranda 'd'.
+                // Eski kayıtlarda 'd' de bulunabildiği için ikisi de denenir.
+                const raw = isD ? (m.d1 ?? m.d) : m[judgeKey];
                 setJudgeName(typeof raw === 'string' ? raw.trim() : (raw?.name || ''));
             }
         );
@@ -303,8 +304,14 @@ export default function JudgeCockpitPage() {
     const tapLanding   = useCallback((val) => writeLanding(val, true), [writeLanding]);
     const clearLanding = useCallback(() => writeLanding(0, false), [writeLanding]);
 
+    // Kaç kutu gösterilecek — sayı CJP'den gelir, yoksa 10 varsayılır.
+    // İniş (L) yalnızca tam seride puanlanır: hareket sayısı 10'un altındaysa
+    // seri tamamlanmamış demektir, L kutusu hiç gösterilmez ve toplama girmez.
+    const shownJumps  = elementCount || JUMP_COUNT;
+    const showLanding = shownJumps >= JUMP_COUNT;
+
     // ── Ortak tuş takımı ──────────────────────────────────────────────────
-    const isLandingFocused = focused === JUMP_COUNT;
+    const isLandingFocused = showLanding && focused === JUMP_COUNT;
     const activeOptions = isLandingFocused ? LANDING_OPTIONS : DEDUCT_OPTIONS;
 
     const pressKey = useCallback((tenths) => {
@@ -345,13 +352,24 @@ export default function JudgeCockpitPage() {
     // ── E hakem toplam ────────────────────────────────────────────────────
     // Yalnızca puanlanan elemanlar sayılır; CJP de calcEScore'da fazlasını
     // yok sayıyor, eskiden hakem gereksiz yere farklı bir toplam görüyordu.
-    const shownJumps = elementCount || JUMP_COUNT;
-    const eTotal = deductions.slice(0, shownJumps).reduce((a, b) => a + b, 0) + landing;
+    const eTotal = deductions.slice(0, shownJumps).reduce((a, b) => a + b, 0)
+        + (showLanding ? landing : 0);
 
     // CJP eleman sayısını yazmamışsa (sporcu bu sürümden önce sahaya
     // çağrılmışsa olur) 10 elemanla devam edilir — puanlama kilitlenmez.
     const canSubmit = !!athlete;
-    const filledCount = entered.slice(0, shownJumps).filter(Boolean).length + (landingEntered ? 1 : 0);
+    const boxCount = shownJumps + (showLanding ? 1 : 0);
+    const filledCount = entered.slice(0, shownJumps).filter(Boolean).length
+        + (showLanding && landingEntered ? 1 : 0);
+
+    // L gizlendiğinde (hareket sayısı 10'un altına düştü): odak kutulara
+    // döner ve daha önce girilmiş iniş değeri temizlenir — aksi halde CJP
+    // hesabında görünmeyen bir kesinti kalırdı.
+    useEffect(() => {
+        if (showLanding) return;
+        if (focused === JUMP_COUNT) setFocused(Math.max(0, shownJumps - 1));
+        if (landingEnteredRef.current || landingRef.current !== 0) clearLanding();
+    }, [showLanding, shownJumps, focused, clearLanding]);
 
     // ── Unlock ────────────────────────────────────────────────────────────
     function handleUnlock() {
@@ -679,11 +697,11 @@ export default function JudgeCockpitPage() {
                 {/* Kutular — #1..#N + L, hepsi tek satırda */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${shownJumps + 1}, 1fr)`,
+                    gridTemplateColumns: `repeat(${boxCount}, 1fr)`,
                     gap: 'clamp(4px, 0.8vw, 10px)',
                 }}>
-                    {Array.from({ length: shownJumps + 1 }, (_, i) => {
-                        const isL = i === shownJumps;
+                    {Array.from({ length: boxCount }, (_, i) => {
+                        const isL = showLanding && i === shownJumps;
                         const slot = isL ? JUMP_COUNT : i;
                         const val = isL ? landing : deductions[i];
                         const isEntered = isL ? landingEntered : entered[i];
@@ -693,8 +711,10 @@ export default function JudgeCockpitPage() {
                                 <div style={{
                                     textAlign: 'center',
                                     fontSize: 'clamp(0.6rem, 1.3vw, 0.8rem)',
-                                    fontWeight: 700, letterSpacing: 0.5,
-                                    color: isFocused ? 'var(--accent-primary, #F43F5E)' : '#666',
+                                    fontWeight: 800, letterSpacing: 0.5,
+                                    // Gradyan zemin üzerinde #666 okunmuyordu
+                                    color: isFocused ? '#ffffff' : 'rgba(255,255,255,0.8)',
+                                    textShadow: '0 1px 3px rgba(0,0,0,0.5)',
                                 }}>
                                     {isL ? 'L' : `#${i + 1}`}
                                 </div>
@@ -705,10 +725,11 @@ export default function JudgeCockpitPage() {
                                         aspectRatio: '3 / 4',
                                         // Kutular referanstaki gibi her zaman açık renk;
                                         // dolu olan beyaz ve koyu yazılı, boş olan soluk.
-                                        background: isEntered ? '#ffffff' : 'rgba(255,255,255,0.72)',
-                                        border: `3px solid ${isFocused ? '#ffffff' : 'transparent'}`,
+                                        background: '#ffffff',
+                                        border: `3px solid ${isFocused ? '#0f172a' : 'transparent'}`,
                                         borderRadius: 8,
-                                        color: '#0f172a',
+                                        // Boşken kutu numarası soluk gri placeholder olarak durur
+                                        color: isEntered ? '#0f172a' : '#c2ccd9',
                                         fontFamily: "'Space Mono', monospace",
                                         fontSize: 'clamp(0.75rem, 1.7vw, 1.3rem)',
                                         fontWeight: 700,
@@ -718,7 +739,7 @@ export default function JudgeCockpitPage() {
                                         padding: 0,
                                     }}
                                 >
-                                    {isEntered ? val.toFixed(1) : ''}
+                                    {isEntered ? val.toFixed(1) : (isL ? 'L' : i + 1)}
                                 </button>
                             </div>
                         );
@@ -743,7 +764,7 @@ export default function JudgeCockpitPage() {
                         transition: 'all 0.2s',
                     }}
                 >
-                    {submitted ? '✓ GÖNDERİLDİ' : `GÖNDER  ${filledCount}/${shownJumps + 1}`}
+                    {submitted ? '✓ GÖNDERİLDİ' : `GÖNDER  ${filledCount}/${boxCount}`}
                 </button>
 
                 {/* Ortak tuş takımı */}
