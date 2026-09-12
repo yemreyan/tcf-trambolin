@@ -315,180 +315,242 @@ export default function ResultsFinalPage() {
         XLSX.writeFile(wb, `${comp?.name || 'Yarisma'}_Tum_Sonuclar.xlsx`);
     }
 
-    function printAll() {
-        // Kategori seçiliyse sadece o, seçilmemişse tümü
-        const cats = selectedCatId && categories[selectedCatId]
-            ? [categories[selectedCatId]]
+    /**
+     * TCF resmî sonuç raporu — yazdır / PDF olarak kaydet.
+     *
+     * Biçim eski TCF sisteminden alındı: A4 sayfa, kurumsal kırmızı başlık,
+     * kategori başına ayrı sayfa, altta imza satırı. Üstüne TCF logosu ve
+     * takım sonuçları eklendi.
+     *
+     * @param {'current'|'all'} scope  Yalnızca seçili kategori mi, tümü mü
+     */
+    function printReport(scope) {
+        const cats = scope === 'current'
+            ? (selectedCatId && categories[selectedCatId] ? [categories[selectedCatId]] : [])
             : Object.values(categories);
-        if (cats.length === 0) return;
 
-        // ── Her kategori için sıralama oluştur ───────────────────────────
+        if (cats.length === 0) {
+            toast('Yazdırılacak kategori yok.', 'warning');
+            return;
+        }
+
+        // Firebase'den gelen isimler HTML'e gömülüyor — kaçış şart
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+
+        const fmtP = (val, status) => formatResultScore(val, status, '-');
+        const medal = (rank) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : (rank ?? '—');
+
+        // ── Kategori satırlarını kur (ekrandakiyle aynı mantık) ──────────
         function buildRows(cat) {
-            const r       = getScoringRule(cat, rules.flow);
-            const catSync = cat.type === 'sync';
-            const rows    = [];
-            const pById   = {};
+            const cr    = resolveCategoryRules(rules, cat);
+            const sync  = cat.type === 'sync';
+            const rows  = [];
+            const pById = {};
             Object.values(pairs).forEach(p => { if (p?.id) pById[p.id] = p; });
-
             const catAths = athletes.filter(a => athleteInCategory(a, cat));
 
-            if (catSync) {
+            const push = (nameVal, clubVal, res, aRef) => {
+                const r1d = res.r1 || null;
+                const r2d = res.r2 || null;
+                const { r1, r2, total } = computeRoutineTotals(r1d, r2d, cr.scoringRule);
+                rows.push({ name: nameVal, club: clubVal, r1, r2, total, a: aRef, s1: r1d?.status, s2: r2d?.status });
+            };
+
+            if (sync) {
                 const seen = new Set();
                 catAths.forEach(a => {
                     if (a.pairId && pById[a.pairId]) {
                         if (seen.has(a.pairId)) return;
                         seen.add(a.pairId);
                         const pair = pById[a.pairId];
-                        const res  = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
-                        const r1d  = res.r1 || null;
-                        const r2d  = res.r2 || null;
-                        // DNS/DNF → sıralama dışı (null)
-                        const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
-                        rows.push({ name: getPairDisplayName(pair, athletesById) || '—', club: pair.club || a.club || '', v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                        const res = scores[pair.id] || scores[pair.athlete1Id] || scores[pair.athlete2Id] || {};
+                        push(getPairDisplayName(pair, athletesById) || '—', pair.club || a.club || '', res, a);
                     } else {
-                        const res = scores[a.uniqueId] || scores[a.id] || {};
-                        const r1d = res.r1 || null; const r2d = res.r2 || null;
-                        const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
-                        rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                        push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
                     }
                 });
             } else {
                 catAths.forEach(a => {
-                    const res = scores[a.uniqueId] || scores[a.id] || {};
-                    const r1d = res.r1 || null; const r2d = res.r2 || null;
-                    const { r1: v1, r2: v2, total: tot } = computeRoutineTotals(r1d, r2d, r);
-                    rows.push({ name: getAthleteName(a), club: getAthleteClub(a), v1, v2, tot, s1: r1d?.status, s2: r2d?.status });
+                    push(getAthleteName(a), getAthleteClub(a), scores[a.uniqueId] || scores[a.id] || {}, a);
                 });
             }
 
-            const scored   = rows.filter(x => x.v1 != null || x.v2 != null).sort((a, b) => b.tot - a.tot);
-            const unscored = rows.filter(x => x.v1 == null && x.v2 == null);
+            const scored   = rows.filter(x => x.r1 != null || x.r2 != null).sort((a, b) => b.total - a.total);
+            const unscored = rows.filter(x => x.r1 == null && x.r2 == null);
             let lv = null, lr = 0;
             scored.forEach((x, i) => {
-                if (lv !== null && x.tot === lv) x.rank = lr;
-                else { x.rank = i + 1; lr = x.rank; lv = x.tot; }
+                if (lv !== null && x.total === lv) x.rank = lr;
+                else { x.rank = i + 1; lr = x.rank; lv = x.total; }
             });
             unscored.forEach(x => { x.rank = null; });
-            return [...scored, ...unscored];
+            return { rows: [...scored, ...unscored], cr };
         }
 
-        const fmtP = (val, status) => formatResultScore(val, status, '-');
-
-        function medalEmoji(rank) {
-            if (rank === 1) return '🥇';
-            if (rank === 2) return '🥈';
-            if (rank === 3) return '🥉';
-            return rank ?? '—';
-        }
-
-        // ── HTML blokları ─────────────────────────────────────────────────
-        const catBlocks = cats.map(cat => {
-            const rows = buildRows(cat);
-            if (rows.length === 0) return '';
-            const ruleLabel = getScoringRule(cat, rules.flow) === 'max' ? 'GEÇERLİ = MAX(R1,R2)' : 'TOPLAM = R1 + R2';
-            const syncLabel = cat.type === 'sync' ? ' <span class="badge-sync">SENKRONİZE</span>' : '';
-
-            const trs = rows.map(x => `
-                <tr class="${x.rank === 1 ? 'gold' : x.rank === 2 ? 'silver' : x.rank === 3 ? 'bronze' : ''}">
-                    <td class="rank">${medalEmoji(x.rank)}</td>
-                    <td>
-                        <div class="name">${x.name}</div>
-                        <div class="club">${x.club || '—'}</div>
-                    </td>
-                    <td class="score">${fmtP(x.v1, x.s1)}</td>
-                    <td class="score">${fmtP(x.v2, x.s2)}</td>
-                    <td class="total">${x.rank != null ? Number(x.tot).toFixed(3) : '—'}</td>
-                </tr>`).join('');
-
-            return `
-                <div class="cat-section">
-                    <div class="cat-header">
-                        <span class="cat-name">${cat.name}${syncLabel}</span>
-                        <span class="rule-badge">${ruleLabel}</span>
+        // ── Sayfa iskeleti ───────────────────────────────────────────────
+        const page = (cat, subtitle, tableHtml, note) => `
+            <div class="page">
+                <div class="header">
+                    <img class="logo" src="${window.location.origin}/tcf-logo.png" alt="TCF" />
+                    <div class="head-text">
+                        <div class="comp-name">${esc(comp?.name || '')}</div>
+                        <h1 class="cat-name">${esc(cat.name)}</h1>
+                        <div class="sub-header">${esc(subtitle)}</div>
                     </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width:56px">Sıra</th>
-                                <th>Ad Soyad / Kulüp</th>
-                                <th style="width:100px;text-align:right">R1</th>
-                                <th style="width:100px;text-align:right">R2</th>
-                                <th style="width:120px;text-align:right">Toplam</th>
-                            </tr>
-                        </thead>
-                        <tbody>${trs}</tbody>
-                    </table>
-                </div>`;
-        }).join('');
+                </div>
+                ${note ? `<div class="note">${esc(note)}</div>` : ''}
+                ${tableHtml}
+                <div class="footer">
+                    <div>TCF TRAMBOLİN CİMNASTİK SİSTEMİ</div>
+                    <div>Oluşturulma: ${new Date().toLocaleString('tr-TR')}</div>
+                </div>
+                <div class="signs">
+                    <div class="sign"><span></span>Başhakem</div>
+                    <div class="sign"><span></span>Üst Jüri</div>
+                    <div class="sign"><span></span>Teknik Sorumlu</div>
+                </div>
+            </div>`;
 
-        const now = new Date().toLocaleString('tr-TR');
-        const html = `<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8">
-<title>${comp?.name || 'Sonuçlar'} — Final Raporu</title>
+        let body = '';
+
+        cats.forEach(cat => {
+            const { rows, cr } = buildRows(cat);
+            if (rows.length === 0) return;
+
+            const showR2  = cr.routineCount >= 2;
+            const totLbl  = cr.scoringRule === 'max' ? 'GEÇERLİ' : 'TOPLAM';
+            const ruleTxt = cr.scoringRule === 'max' ? 'Geçerli puan = MAX(1. Seri, 2. Seri)' : 'Toplam = 1. Seri + 2. Seri';
+
+            // ── Bireysel ────────────────────────────────────────────────
+            const indTable = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="c" style="width:52px">SIRA</th>
+                            <th>AD SOYAD</th>
+                            <th>KULÜP</th>
+                            <th class="c" style="width:82px">1. SERİ</th>
+                            ${showR2 ? '<th class="c" style="width:82px">2. SERİ</th>' : ''}
+                            <th class="c" style="width:92px">${totLbl}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map(x => `
+                            <tr class="${x.rank === 1 ? 'gold' : x.rank === 2 ? 'silver' : x.rank === 3 ? 'bronze' : ''}">
+                                <td class="rank-col">${medal(x.rank)}</td>
+                                <td class="name-col">${esc(x.name)}</td>
+                                <td class="club-col">${esc(x.club || '—')}</td>
+                                <td class="score-col">${fmtP(x.r1, x.s1)}</td>
+                                ${showR2 ? `<td class="score-col">${fmtP(x.r2, x.s2)}</td>` : ''}
+                                <td class="total-col">${x.rank == null ? '—' : x.total.toFixed(3)}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            body += page(cat, 'RESMÎ SONUÇ LİSTESİ — BİREYSEL', indTable, ruleTxt);
+
+            // ── Takım ───────────────────────────────────────────────────
+            if (!cr.hasTeam) return;
+            const teams = computeTeamRanking(rows, {
+                topN: rules.flow.teamTopN,
+                minAthletes: cr.teamMinAthletes,
+                mode: cr.teamMode,
+                perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
+                routineCount: cr.routineCount,
+            });
+            if (teams.length === 0) return;
+
+            const teamNote = teams[0].perRoutine
+                ? `Takım puanı = her serinin en iyi ${rules.flow.teamTopN} puanı toplanır · en az ${cr.teamMinAthletes} sporcu`
+                : `Takım puanı = en iyi ${rules.flow.teamTopN} sporcunun toplamı · en az ${cr.teamMinAthletes} sporcu`;
+
+            const teamTable = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="c" style="width:52px">SIRA</th>
+                            <th>KULÜP</th>
+                            <th class="c" style="width:78px">SPORCU</th>
+                            <th>PUANA SAYILANLAR</th>
+                            <th class="c" style="width:92px">TOPLAM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${teams.map((t, i) => `
+                            <tr class="${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">
+                                <td class="rank-col">${medal(i + 1)}</td>
+                                <td class="name-col">${esc(t.club)}</td>
+                                <td class="score-col">${t.members.length}</td>
+                                <td class="club-col">${
+                                    t.perRoutine && t.routineBreakdown
+                                        ? `1. Seri ${t.routineBreakdown.r1.toFixed(3)}${showR2 ? ` + 2. Seri ${t.routineBreakdown.r2.toFixed(3)}` : ''}`
+                                        : esc(t.top3.map(r => r.name).join(', '))
+                                }</td>
+                                <td class="total-col">${t.teamTotal.toFixed(3)}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            body += page(cat, 'RESMÎ SONUÇ LİSTESİ — TAKIM', teamTable, teamNote);
+        });
+
+        if (!body) {
+            toast('Yazdırılacak sonuç bulunamadı.', 'warning');
+            return;
+        }
+
+        const html = `<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<title>${esc(comp?.name || 'Sonuçlar')} — TCF Resmî Sonuçlar</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; background: white; }
+  @page { size: A4; margin: 0; }
+  body { font-family:'Outfit',sans-serif; margin:0; color:#1e293b;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#e2e8f0; }
+  .page { width:210mm; min-height:297mm; padding:12mm; margin:0 auto 10px; background:#fff;
+          box-sizing:border-box; page-break-after:always; display:flex; flex-direction:column; }
+  .page:last-child { page-break-after:auto; }
 
-  /* Başlık */
-  .page-header { text-align: center; padding: 18px 0 12px; border-bottom: 3px solid #1e293b; margin-bottom: 20px; }
-  .badge { display: inline-block; background: #1e293b; color: white; font-size: 9pt; font-weight: 700; padding: 2px 10px; border-radius: 4px; letter-spacing: 2px; margin-bottom: 6px; }
-  .comp-name { font-size: 18pt; font-weight: 900; letter-spacing: 1px; }
-  .report-meta { font-size: 9pt; color: #555; margin-top: 4px; }
+  .header { background:#E30613; color:#fff; padding:14px 18px; border-radius:12px;
+            margin-bottom:18px; display:flex; align-items:center; gap:16px; }
+  .logo { width:64px; height:64px; background:#fff; border-radius:50%; padding:4px; flex-shrink:0; object-fit:contain; }
+  .head-text { text-align:left; min-width:0; }
+  .comp-name { font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:1px; opacity:.95; }
+  .cat-name  { font-size:26px; font-weight:900; margin:2px 0 0; }
+  .sub-header{ font-size:11px; opacity:.9; margin-top:3px; font-weight:600; letter-spacing:1px; }
 
-  /* Kategori bloku */
-  .cat-section { margin-bottom: 24px; page-break-inside: avoid; }
-  .cat-header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: white; padding: 7px 14px; border-radius: 4px 4px 0 0; }
-  .cat-name { font-size: 12pt; font-weight: 700; }
-  .rule-badge { font-size: 8pt; background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 3px; }
-  .badge-sync { font-size: 8pt; background: #7c3aed; color: white; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+  .note { font-size:10px; color:#64748b; margin-bottom:8px; font-weight:600; }
 
-  /* Tablo */
-  table { width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; }
-  thead th { background: #f1f5f9; font-size: 9pt; font-weight: 700; padding: 6px 10px; border: 1px solid #d1d5db; text-align: left; color: #374151; letter-spacing: 0.5px; text-transform: uppercase; }
-  tbody td { padding: 7px 10px; border: 1px solid #e5e7eb; vertical-align: middle; }
-  tbody tr:nth-child(even) { background: #f9fafb; }
-  .rank { font-size: 14pt; font-weight: 900; text-align: center; width: 56px; }
-  .name { font-weight: 700; font-size: 10.5pt; }
-  .club { font-size: 8.5pt; color: #6b7280; margin-top: 1px; }
-  .score { font-family: monospace; font-size: 10pt; text-align: right; color: #374151; }
-  .total { font-family: monospace; font-size: 12pt; font-weight: 900; text-align: right; }
+  table { width:100%; border-collapse:separate; border-spacing:0 5px; }
+  th { text-align:left; font-size:9.5px; font-weight:800; color:#64748b; text-transform:uppercase;
+       letter-spacing:.8px; padding:0 10px 7px; border-bottom:2px solid #e2e8f0; }
+  th.c { text-align:center; }
+  td { background:#f8fafc; padding:8px 10px; font-size:12px; font-weight:600; color:#334155;
+       border:1px solid #e2e8f0; border-width:1px 0; }
+  tr td:first-child { border-left:1px solid #e2e8f0; border-radius:8px 0 0 8px; }
+  tr td:last-child  { border-right:1px solid #e2e8f0; border-radius:0 8px 8px 0; }
 
-  /* Madalya satırları */
-  tr.gold   { background: #fffbeb !important; }
-  tr.silver { background: #f8fafc !important; }
-  tr.bronze { background: #fff7ed !important; }
-  tr.gold   .total { color: #b45309; }
-  tr.silver .total { color: #475569; }
-  tr.bronze .total { color: #92400e; }
+  tr.gold   td { background:#fffbeb; border-color:#fcd34d; }
+  tr.silver td { background:#f8fafc; border-color:#cbd5e1; }
+  tr.bronze td { background:#fff7ed; border-color:#fdba74; }
 
-  /* Alt bilgi */
-  .page-footer { text-align: center; font-size: 8pt; color: #9ca3af; margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+  .rank-col  { font-weight:900; color:#E30613; font-size:14px; text-align:center; }
+  .name-col  { font-size:13px; font-weight:800; color:#0f172a; }
+  .club-col  { font-weight:500; color:#64748b; font-size:10.5px; text-transform:uppercase; }
+  .score-col { text-align:center; font-family:'Space Mono',monospace; font-size:12px; }
+  .total-col { text-align:center; font-weight:900; color:#000; font-size:13px; background:#eef2f7; }
 
-  @media print {
-    body { font-size: 10pt; }
-    .cat-section { page-break-inside: avoid; }
-  }
-</style>
-</head>
-<body>
-  <div class="page-header">
-    <div class="badge">TCF — TÜRKİYE CİMNASTİK FEDERASYONU</div>
-    <div class="comp-name">${comp?.name || 'Yarışma Sonuçları'}</div>
-    <div class="report-meta">FİNAL SONUÇ RAPORU &nbsp;·&nbsp; ${now}</div>
-  </div>
+  .footer { margin-top:auto; padding-top:14px; border-top:1px solid #e2e8f0;
+            display:flex; justify-content:space-between; font-size:9px; color:#94a3b8; font-weight:500; }
+  .signs { display:flex; justify-content:space-between; gap:24px; margin-top:26px; }
+  .sign { flex:1; text-align:center; font-size:10px; color:#475569; font-weight:600; }
+  .sign span { display:block; border-top:1px solid #94a3b8; margin-bottom:5px; height:34px; }
 
-  ${catBlocks}
-
-  <div class="page-footer">
-    TCF Trampolin Puanlama Sistemi &nbsp;·&nbsp; ${now}
-  </div>
-<script>window.onload = () => { window.print(); }</script>
-</body>
-</html>`;
+  @media print { body { background:#fff; } .page { margin:0; } }
+</style></head>
+<body>${body}<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script></body></html>`;
 
         const w = window.open('', '_blank');
+        if (!w) { toast('Açılır pencere engellendi — tarayıcı iznini kontrol edin.', 'error'); return; }
         w.document.write(html);
         w.document.close();
     }
@@ -531,8 +593,15 @@ export default function ResultsFinalPage() {
                     <button className="btn btn-outline btn-sm" onClick={exportAllToExcel}>
                         <i className="material-icons-round">file_download</i> Tümü
                     </button>
-                    <button className="btn btn-outline btn-sm" onClick={printAll}>
-                        <i className="material-icons-round">print</i> Yazdır
+                    <button className="btn btn-sm" onClick={() => printReport('current')} disabled={!currentCat}
+                        style={{ background: '#E30613', color: 'white', opacity: currentCat ? 1 : 0.5 }}
+                        title="Seçili kategorinin bireysel + takım sonuçları">
+                        <i className="material-icons-round">picture_as_pdf</i> PDF — Bu Kategori
+                    </button>
+                    <button className="btn btn-sm" onClick={() => printReport('all')}
+                        style={{ background: '#1e293b', color: 'white' }}
+                        title="Tüm kategorilerin bireysel + takım sonuçları">
+                        <i className="material-icons-round">picture_as_pdf</i> PDF — Tümü
                     </button>
                 </div>
             </nav>
