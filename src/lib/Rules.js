@@ -45,6 +45,15 @@ export const DEFAULT_RULES = {
         finalistCount: 8,
         reserveCount: 2,
         teamTopN: 3,                    // takım puanına sayılan sporcu sayısı
+        // Bazı yaş kategorilerinde takım puanı daha az sporcudan oluşur.
+        // Kategori adında anahtar kelime geçiyorsa bu sayı uygulanır.
+        // Sayıya girmeyen sporcular listede üstü çizili gösterilir.
+        teamTopNByKeyword: [
+            { keyword: 'genç',  n: 2 },
+            { keyword: 'genc',  n: 2 },
+            { keyword: 'büyük', n: 2 },
+            { keyword: 'buyuk', n: 2 },
+        ],
         // Bir kulübün takım sayılabilmesi için gereken en az sporcu.
         // Altında kalan kulüpler takım listesinde HİÇ görünmez.
         teamMinAthletes: 3,
@@ -137,6 +146,7 @@ export const CATEGORY_RULE_FIELDS = {
     hasDScore:    { label: 'Zorluk (D) puanı', hint: 'Kapalıysa D puanı hiç sorulmaz ve toplama girmez' },
     hasTeam:      { label: 'Takım sıralaması', hint: 'Kapalıysa bu kategori takım puanına girmez' },
     teamMode:     { label: 'Takım puanı yöntemi', hint: 'Sporcu toplamı mı, seri bazlı en iyiler mi' },
+    teamTopN:     { label: 'Takım puanına sayılan sporcu', hint: 'En iyi kaç sporcunun puanı takım toplamına girer' },
     teamMinAthletes: { label: 'Takım için en az sporcu', hint: 'Kulüpte bu kadar sporcu yoksa takım listesine girmez' },
     teamPerRoutineMinAthletes: { label: 'Seri bazlı için en az sporcu', hint: 'Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır' },
     finalTeamSource: { label: 'Finalde takım kaynağı', hint: 'Final kategorisinde takım puanı eleme mi finalden mi hesaplanır' },
@@ -170,6 +180,8 @@ export function resolveCategoryRules(rules, category) {
         // aksi belirtilmediyse kapalıdır.
         hasTeam:      pick('hasTeam', category?.type === 'sync' ? false : flow.hasTeam) !== false,
         teamMode:     pick('teamMode', flow.teamMode),
+        teamTopN:
+            Number(pick('teamTopN', resolveTeamTopN(category, flow))) || flow.teamTopN,
         teamMinAthletes:
             Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes,
         teamPerRoutineMinAthletes:
@@ -200,6 +212,21 @@ export function resolveTeamSourceCategory(rules, category, categories) {
     const parentId = category.parentCategoryId;
     const parent = parentId ? (categories?.[parentId] || null) : null;
     return parent || category;
+}
+
+/**
+ * Takım puanına sayılan sporcu sayısı — kategori adına göre.
+ * Senkron kategorilerde takım yok; yine de genel değer döner.
+ */
+function resolveTeamTopN(category, flow) {
+    const base = Number(flow.teamTopN) || 3;
+    if (!category || category.type === 'sync') return base;
+    const name = String(category.name || '').toLowerCase();
+    for (const rule of (flow.teamTopNByKeyword || [])) {
+        const k = String(rule?.keyword || '').toLowerCase();
+        if (k && name.includes(k)) return Number(rule.n) || base;
+    }
+    return base;
 }
 
 /**

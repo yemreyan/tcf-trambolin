@@ -501,19 +501,24 @@ export function computeTeamRanking(rows, o = {}) {
                 o.mode === 'perRoutine' &&
                 rs.length >= (Number(o.perRoutineMinAthletes) || 4);
 
-            // Her seri için puana SAYILAN sporcular ve o serinin ara toplamı.
-            // Böylece "1. seriden kimin puanı geldi" ekranda görünebiliyor.
+            // Her seri için kulübün TÜM puanlı sporcuları listelenir; puana
+            // sayılanlar `counted: true`, sayılmayanlar `counted: false` olur.
+            // Sayılmayanlar ekranda üstü çizili gösterilir ve ara toplama
+            // girmez — kadronun tamamı görünsün ama puan doğru kalsın.
             let r1Picks = [], r2Picks = [];
+
+            // Bir seride puana sayılan sporcuların satır kimlikleri
+            const countedIn = { r1: new Set(), r2: new Set() };
 
             if (perRoutine) {
                 // Her serinin en iyi N'i ayrı seçilir — farklı sporcular olabilir
-                const bestOf = (key) => [...rs]
-                    .filter(r => r[key] != null)
-                    .sort((a, b) => b[key] - a[key])
-                    .slice(0, topN)
-                    .map(r => ({ name: nameOf(r), score: r[key] }));
-                r1Picks = bestOf('r1');
-                r2Picks = routineCount >= 2 ? bestOf('r2') : [];
+                [['r1', true], ['r2', routineCount >= 2]].forEach(([key, active]) => {
+                    if (!active) return;
+                    [...rs].filter(r => r[key] != null)
+                        .sort((a, b) => b[key] - a[key])
+                        .slice(0, topN)
+                        .forEach(r => countedIn[key].add(r));
+                });
             } else {
                 const contributors = byTotal.slice(0, topN);
                 if (rule === 'max') {
@@ -522,18 +527,31 @@ export function computeTeamRanking(rows, o = {}) {
                         const a = r.r1 ?? null, b = r.r2 ?? null;
                         if (a == null && b == null) return;
                         const useR1 = b == null || (a != null && a >= b);
-                        if (useR1) r1Picks.push({ name: nameOf(r), score: a });
-                        else r2Picks.push({ name: nameOf(r), score: b });
+                        countedIn[useR1 ? 'r1' : 'r2'].add(r);
                     });
                 } else {
                     contributors.forEach(r => {
-                        if (r.r1 != null) r1Picks.push({ name: nameOf(r), score: r.r1 });
-                        if (routineCount >= 2 && r.r2 != null) r2Picks.push({ name: nameOf(r), score: r.r2 });
+                        if (r.r1 != null) countedIn.r1.add(r);
+                        if (routineCount >= 2 && r.r2 != null) countedIn.r2.add(r);
                     });
                 }
             }
 
-            const sum = (arr) => arr.reduce((a, p) => a + (p.score || 0), 0);
+            // Sayılanlar üstte (puana göre), sayılmayanlar altta (üstü çizili)
+            const picksOf = (key) => {
+                const withScore = rs.filter(r => r[key] != null);
+                const mk = (r) => ({ name: nameOf(r), score: r[key], counted: countedIn[key].has(r) });
+                const counted = withScore.filter(r => countedIn[key].has(r))
+                    .sort((a, b) => b[key] - a[key]).map(mk);
+                const rest = withScore.filter(r => !countedIn[key].has(r))
+                    .sort((a, b) => b[key] - a[key]).map(mk);
+                return [...counted, ...rest];
+            };
+            r1Picks = picksOf('r1');
+            r2Picks = routineCount >= 2 ? picksOf('r2') : [];
+
+            // Ara toplam YALNIZCA puana sayılanlardan
+            const sum = (arr) => arr.reduce((a, p) => a + (p.counted ? (p.score || 0) : 0), 0);
             const routines = [
                 { key: 'r1', label: '1. Seri', picks: r1Picks, subtotal: sum(r1Picks) },
                 ...(routineCount >= 2

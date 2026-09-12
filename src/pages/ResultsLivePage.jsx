@@ -155,7 +155,7 @@ export default function ResultsLivePage() {
             const cr = srcCat ? resolveCategoryRules(rules, srcCat) : null;
             if (srcCat && cr.hasTeam) {
                 const teams = computeTeamRanking(computeRanking(srcCat), {
-                    topN: rules.flow.teamTopN,
+                    topN: cr.teamTopN,
                     minAthletes: cr.teamMinAthletes,
                     mode: cr.teamMode,
                     perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
@@ -301,7 +301,7 @@ export default function ResultsLivePage() {
         if (!isTeamView || !teamSrcCat) return [];
         const cr = resolveCategoryRules(rules, teamSrcCat);
         const all = computeTeamRanking(teamFromQual ? computeRanking(teamSrcCat) : ranking, {
-            topN: rules.flow.teamTopN,
+            topN: cr.teamTopN,
             minAthletes: cr.teamMinAthletes,
             mode: cr.teamMode,
             perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
@@ -468,14 +468,18 @@ export default function ResultsLivePage() {
                                                 borderBottom: idx < rt.picks.length - 1 ? '1px dashed rgba(255,255,255,0.07)' : 'none',
                                             }}>
                                                 <span style={{
-                                                    color: '#cbd5e1', overflow: 'hidden',
+                                                    color: pk.counted ? '#cbd5e1' : '#64748b',
+                                                    textDecoration: pk.counted ? 'none' : 'line-through',
+                                                    overflow: 'hidden',
                                                     textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                 }}>
                                                     {pk.name}
                                                 </span>
                                                 <span style={{
                                                     fontFamily: "'Space Mono', monospace",
-                                                    color: '#A3ACD0', flexShrink: 0,
+                                                    color: pk.counted ? '#A3ACD0' : '#525C82',
+                                                    textDecoration: pk.counted ? 'none' : 'line-through',
+                                                    flexShrink: 0,
                                                 }}>
                                                     {pk.score.toFixed(3)}
                                                 </span>

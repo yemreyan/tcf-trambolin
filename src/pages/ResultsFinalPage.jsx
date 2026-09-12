@@ -260,7 +260,7 @@ export default function ResultsFinalPage() {
         // o kategorinin satırları yeniden kurulur.
         const rows = teamFromQual ? buildRows(teamSrcCat).rows : individualRanking;
         return computeTeamRanking(rows, {
-            topN: rules.flow.teamTopN,
+            topN: teamCr.teamTopN,
             minAthletes: teamCr.teamMinAthletes,
             mode: teamCr.teamMode,
             perRoutineMinAthletes: teamCr.teamPerRoutineMinAthletes,
@@ -473,7 +473,7 @@ export default function ResultsFinalPage() {
             const teamRows = fromQual ? buildRows(srcCat).rows : rows;
 
             const teams = computeTeamRanking(teamRows, {
-                topN: rules.flow.teamTopN,
+                topN: tcr.teamTopN,
                 minAthletes: tcr.teamMinAthletes,
                 mode: tcr.teamMode,
                 perRoutineMinAthletes: tcr.teamPerRoutineMinAthletes,
@@ -483,8 +483,9 @@ export default function ResultsFinalPage() {
             if (teams.length === 0) return;
 
             const teamNote = (teams[0].perRoutine
-                ? `Takım puanı = her serinin en iyi ${rules.flow.teamTopN} puanı toplanır · en az ${tcr.teamMinAthletes} sporcu`
-                : `Takım puanı = en iyi ${rules.flow.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
+                ? `Takım puanı = her serinin en iyi ${tcr.teamTopN} puanı toplanır · en az ${tcr.teamMinAthletes} sporcu`
+                : `Takım puanı = en iyi ${tcr.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
+                + ' · Üstü çizili sporcular puana sayılmaz'
                 + (fromQual ? ` · Kaynak: ${srcCat.name} (eleme) sonuçları` : '');
 
             const teamTable = `
@@ -506,7 +507,7 @@ export default function ResultsFinalPage() {
                                     <td class="picks">
                                         ${rt.picks.length === 0
                                             ? '<span class="muted">—</span>'
-                                            : rt.picks.map(pk => `<div><span>${esc(pk.name)}</span><b>${pk.score.toFixed(3)}</b></div>`).join('')}
+                                            : rt.picks.map(pk => `<div class="${pk.counted ? '' : 'off'}"><span>${esc(pk.name)}</span><b>${pk.score.toFixed(3)}</b></div>`).join('')}
                                         <div class="sub"><span>Ara toplam</span><b>${rt.subtotal.toFixed(3)}</b></div>
                                     </td>`).join('')}
                                 <td class="total-col">${t.teamTotal.toFixed(3)}</td>
@@ -571,6 +572,8 @@ export default function ResultsFinalPage() {
   .picks > div > b { font-family:'Space Mono',monospace; font-weight:700; color:#0f172a; }
   .picks .sub { margin-top:3px; padding-top:3px; border-top:1px solid #cbd5e1; font-weight:800; color:#E30613; }
   .picks .muted { color:#94a3b8; }
+  /* Takım puanına sayılmayan sporcu: listede görünür ama üstü çizili */
+  .picks > div.off, .picks > div.off > b { color:#94a3b8; text-decoration:line-through; }
 
   .footer { margin-top:auto; padding-top:14px; border-top:1px solid #e2e8f0;
             display:flex; justify-content:space-between; font-size:9px; color:#94a3b8; font-weight:500; }
@@ -908,14 +911,18 @@ export default function ResultsFinalPage() {
                                                                     borderBottom: idx < rt.picks.length - 1 ? '1px dashed rgba(255,255,255,0.06)' : 'none',
                                                                 }}>
                                                                     <span style={{
-                                                                        color: '#cbd5e1', overflow: 'hidden',
+                                                                        color: pk.counted ? '#cbd5e1' : '#64748b',
+                                                                        textDecoration: pk.counted ? 'none' : 'line-through',
+                                                                        overflow: 'hidden',
                                                                         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                                     }}>
                                                                         {pk.name}
                                                                     </span>
                                                                     <span style={{
                                                                         fontFamily: "'Space Mono',monospace",
-                                                                        color: '#94a3b8', flexShrink: 0,
+                                                                        color: pk.counted ? '#94a3b8' : '#475569',
+                                                                        textDecoration: pk.counted ? 'none' : 'line-through',
+                                                                        flexShrink: 0,
                                                                     }}>
                                                                         {pk.score.toFixed(3)}
                                                                     </span>
