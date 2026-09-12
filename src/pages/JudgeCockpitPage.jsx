@@ -390,53 +390,36 @@ export default function JudgeCockpitPage() {
     }
 
     // ── D Hakem Arayüzü ───────────────────────────────────────────────────
+    // E paneliyle aynı tema: gradyan zemin, iki satırlı başlık, açık tuşlar.
     if (isD) {
+        const dNum = parseFloat(dVal || 0).toFixed(1);
         return (
-            <div style={{ background: '#050505', color: '#fff', minHeight: '100vh', fontFamily: "'Outfit', sans-serif" }}>
-                {/* Header */}
-                <header style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, height: 70,
-                    background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(10px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.1)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '0 20px', zIndex: 100,
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                            width: 10, height: 10, borderRadius: '50%',
-                            background: connected ? '#00ff00' : '#333',
-                            boxShadow: connected ? '0 0 10px #00ff00' : 'none',
-                        }} />
-                        <div>
-                            <div style={{ fontSize: '0.8rem', letterSpacing: 2, color: '#888', textTransform: 'uppercase' }}>
-                                HAKEM {roleLabel}{judgeName ? ` · ${judgeName}` : ''}
-                            </div>
-                            <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                                {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR...'}
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#888' }}>ZORLUK</div>
-                        <div style={{ fontFamily: "'Space Mono', monospace", fontSize: '1.5rem', color: 'white' }}>
-                            {parseFloat(dVal || 0).toFixed(1)}
-                        </div>
-                    </div>
-                </header>
+            <div style={{
+                height: '100vh', color: '#fff', fontFamily: "'Outfit', sans-serif",
+                overflow: 'hidden', background: SCREEN_BG,
+                display: 'flex', flexDirection: 'column',
+            }}>
+                <JudgeHeader
+                    connected={connected}
+                    roleLabel={roleLabel}
+                    judgeName={judgeName}
+                    rightText={`${athlete?.catName || '—'}${routineLabel}`}
+                    rightValue={dNum}
+                    athleteName={athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR…'}
+                    club={athlete ? getAthleteClub(athlete) : ''}
+                />
 
-                {/* Submit Overlay — puanlar gönderildikten sonra ekranı kilitle */}
+                {/* Gönderim perdesi */}
                 {submitted && (
                     <div style={{
                         position: 'fixed', inset: 0, zIndex: 200,
-                        background: 'rgba(0,0,0,0.92)',
+                        background: 'rgba(9,6,26,0.94)',
                         display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center',
-                        gap: 20,
+                        alignItems: 'center', justifyContent: 'center', gap: 20,
                     }}>
                         <div style={{
                             width: 100, height: 100, borderRadius: '50%',
-                            background: 'rgba(16,185,129,0.15)',
-                            border: '3px solid #10b981',
+                            background: 'rgba(16,185,129,0.15)', border: '3px solid #10b981',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             boxShadow: '0 0 60px rgba(16,185,129,0.4)',
                         }}>
@@ -450,119 +433,120 @@ export default function JudgeCockpitPage() {
                             fontSize: '4rem', fontWeight: 700, color: 'white',
                             textShadow: '0 0 40px rgba(16,185,129,0.6)',
                         }}>
-                            {parseFloat(dVal || 0).toFixed(1)}
+                            {dNum}
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: '#64748b', marginTop: 8 }}>
+                        <div style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: 8 }}>
                             {athlete ? getAthleteName(athlete) : '—'}
                         </div>
                         <button onClick={() => setSubmitted(false)} style={correctBtnStyle}>
                             <i className="material-icons-round">edit</i> DÜZELT
                         </button>
-                        <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 12, letterSpacing: 1 }}>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: 12, letterSpacing: 1 }}>
                             Düzeltip tekrar gönderebilirsiniz
                         </div>
                     </div>
                 )}
 
-            {/* Body — D hakem tek değer girişi */}
-                <div style={{ paddingTop: 90, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '90px 24px 160px', maxWidth: 500, margin: '0 auto' }}>
-                    <div style={{ fontSize: '0.9rem', color: '#888', letterSpacing: 2, marginBottom: 24, textAlign: 'center' }}>
-                        ZORLUK DEĞERİ (D)
-                    </div>
-
-                    {/* Büyük sayı göstergesi */}
-                    <div style={{
-                        background: submitted ? 'rgba(16,185,129,0.15)' : '#111',
-                        border: `2px solid ${submitted ? '#10b981' : '#333'}`,
-                        borderRadius: 24, padding: '40px 60px', marginBottom: 32, textAlign: 'center',
-                        boxShadow: submitted ? '0 0 30px rgba(16,185,129,0.3)' : 'none',
-                        transition: 'all 0.3s',
-                    }}>
-                        <div style={{ fontFamily: "'Space Mono', monospace", fontSize: '4rem', fontWeight: 700, color: submitted ? '#10b981' : 'white' }}>
-                            {parseFloat(dVal || 0).toFixed(1)}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 8 }}>ZORLUK PUANI</div>
-                    </div>
-
-                    {/* Sayı klavyesi */}
-                    <div style={{
-                        background: '#111', border: '1px solid #222', borderRadius: 16, padding: 20, width: '100%',
-                    }}>
-                        <div style={{ marginBottom: 16 }}>
-                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: 8, letterSpacing: 1 }}>
-                                DEĞER GİRİN
-                            </label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="20"
-                                value={dVal}
-                                onChange={e => handleDValChange(e.target.value)}
-                                placeholder="0.0"
-                                style={{
-                                    width: '100%', background: '#0a0a0a', border: '1px solid #333',
-                                    borderRadius: 12, padding: '16px 20px', color: 'white',
-                                    fontFamily: "'Space Mono', monospace", fontSize: '2rem', textAlign: 'center',
-                                    outline: 'none', boxSizing: 'border-box',
-                                }}
-                            />
-                        </div>
-
-                        {/* Hızlı seçim butonları (yaygın D değerleri) */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                            {[7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5].map(v => (
-                                <button
-                                    key={v}
-                                    onClick={() => handleDValChange(String(v))}
-                                    style={{
-                                        padding: '12px 4px',
-                                        background: parseFloat(dVal) === v ? '#F43F5E' : '#1a1a1a',
-                                        border: `1px solid ${parseFloat(dVal) === v ? '#F43F5E' : '#333'}`,
-                                        borderRadius: 8, color: parseFloat(dVal) === v ? 'white' : '#888',
-                                        fontFamily: "'Space Mono', monospace", fontSize: '0.85rem',
-                                        fontWeight: 700, cursor: 'pointer', transition: 'all 0.1s',
-                                    }}
-                                    onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                                    onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                >
-                                    {v.toFixed(1)}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Submit Bar */}
+                {/* Gövde — tek ekran, kaydırma yok */}
                 <div style={{
-                    position: 'fixed', bottom: 0, left: 0, right: 0, height: 110,
-                    background: 'linear-gradient(to top, #000 60%, transparent)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-                    paddingBottom: 20, gap: 16,
+                    flex: 1, minHeight: 0, width: '100%',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                    gap: 'clamp(12px, 2.5vh, 28px)', padding: 'clamp(12px, 2vw, 28px)',
+                    maxWidth: 760, margin: '0 auto', boxSizing: 'border-box',
                 }}>
+                    {/* Büyük değer göstergesi */}
                     <div style={{
-                        background: submitted ? '#10b981' : '#F43F5E',
-                        color: 'white', padding: '10px 30px', borderRadius: 50,
-                        fontFamily: "'Space Mono', monospace", fontSize: '1.4rem', fontWeight: 700,
-                        boxShadow: submitted ? '0 0 20px rgba(16,185,129,0.5)' : '0 10px 30px rgba(0,0,0,0.5)',
-                        transition: 'all 0.3s',
+                        background: '#ffffff', borderRadius: 12,
+                        padding: 'clamp(14px, 3vh, 32px)', textAlign: 'center',
+                        boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
                     }}>
-                        {parseFloat(dVal || 0).toFixed(1)}
+                        <div style={{
+                            fontFamily: "'Space Mono', monospace",
+                            fontSize: 'clamp(2.4rem, 9vw, 5rem)', fontWeight: 700,
+                            color: '#0f172a', lineHeight: 1,
+                        }}>
+                            {dNum}
+                        </div>
+                        <div style={{
+                            fontSize: 'clamp(0.65rem, 1.4vw, 0.85rem)', color: '#64748b',
+                            marginTop: 8, letterSpacing: 2, fontWeight: 700,
+                        }}>
+                            ZORLUK PUANI (D)
+                        </div>
                     </div>
+
+                    {/* Serbest giriş */}
+                    <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="20"
+                        value={dVal}
+                        onChange={e => handleDValChange(e.target.value)}
+                        placeholder="Değer girin"
+                        disabled={submitted}
+                        style={{
+                            width: '100%', background: 'rgba(255,255,255,0.92)',
+                            border: 'none', borderRadius: 10,
+                            padding: 'clamp(8px, 1.6vh, 14px)', color: '#0f172a',
+                            fontFamily: "'Space Mono', monospace",
+                            fontSize: 'clamp(1rem, 2.4vw, 1.6rem)', textAlign: 'center',
+                            outline: 'none', boxSizing: 'border-box', fontWeight: 700,
+                            boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
+                        }}
+                    />
+
+                    {/* Gönder */}
                     <button
                         onClick={handleSubmit}
-                        disabled={!dVal && dVal !== '0'}
+                        disabled={(!dVal && dVal !== '0') || submitted}
                         style={{
-                            background: submitted ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.1)',
-                            border: `2px solid ${submitted ? '#10b981' : 'rgba(255,255,255,0.3)'}`,
-                            color: submitted ? '#10b981' : 'white',
-                            padding: '10px 24px', borderRadius: 50,
-                            fontSize: '1rem', fontWeight: 700, cursor: 'pointer',
-                            transition: 'all 0.3s',
+                            width: '100%', padding: 'clamp(10px, 2vh, 18px)',
+                            borderRadius: 12, border: 'none',
+                            background: submitted ? '#10b981' : 'var(--accent-primary, #F43F5E)',
+                            color: 'white', fontSize: 'clamp(0.9rem, 2vw, 1.15rem)',
+                            fontWeight: 800, letterSpacing: 2,
+                            fontFamily: "'Outfit', sans-serif",
+                            cursor: (!dVal && dVal !== '0') || submitted ? 'not-allowed' : 'pointer',
+                            opacity: (!dVal && dVal !== '0') ? 0.35 : 1,
+                            transition: 'all 0.2s',
                         }}
                     >
                         {submitted ? '✓ GÖNDERİLDİ' : 'GÖNDER'}
                     </button>
+
+                    {/* Hızlı seçim — E panelindeki tuş takımıyla aynı görünüm */}
+                    <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+                        gap: 'clamp(5px, 1vw, 12px)',
+                    }}>
+                        {[7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5].map(v => {
+                            const isCurrent = parseFloat(dVal) === v;
+                            return (
+                                <button
+                                    key={v}
+                                    onClick={() => !submitted && handleDValChange(String(v))}
+                                    disabled={submitted}
+                                    style={{
+                                        aspectRatio: '5 / 3',
+                                        background: isCurrent ? '#0f172a' : '#f8fafc',
+                                        border: 'none', borderRadius: 10,
+                                        color: isCurrent ? '#fff' : '#0f172a',
+                                        fontFamily: "'Space Mono', monospace",
+                                        fontSize: 'clamp(0.75rem, 1.8vw, 1.2rem)',
+                                        fontWeight: 700,
+                                        cursor: submitted ? 'not-allowed' : 'pointer',
+                                        boxShadow: '0 3px 10px rgba(0,0,0,0.3)',
+                                        transition: 'all 0.1s',
+                                    }}
+                                    onPointerDown={e => { if (!submitted) e.currentTarget.style.transform = 'scale(0.92)'; }}
+                                    onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                                >
+                                    {v.toFixed(1)}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         );
@@ -572,79 +556,19 @@ export default function JudgeCockpitPage() {
     return (
         <div style={{
             height: '100vh', color: '#fff', fontFamily: "'Outfit', sans-serif", overflow: 'hidden',
-            background: 'linear-gradient(115deg, #3b1d8f 0%, #6d1f7a 45%, #b81f3a 78%, #d92036 100%)',
+            background: SCREEN_BG,
             position: 'relative',
             display: 'flex', flexDirection: 'column',
         }}>
-            {/* Başlık — üstte hakem, altında sahadaki sporcu */}
-            <header style={{ flexShrink: 0, zIndex: 100 }}>
-                {/* Satır 1: hakem + kategori/seri + kesinti toplamı */}
-                <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: 'clamp(6px, 1.2vh, 12px) clamp(14px, 2.5vw, 28px)',
-                    gap: 12,
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                        <div style={{
-                            width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-                            background: connected ? '#4ade80' : '#64748b',
-                            boxShadow: connected ? '0 0 10px #4ade80' : 'none',
-                        }} />
-                        <span style={{
-                            fontWeight: 800, fontSize: 'clamp(0.85rem, 1.9vw, 1.25rem)', letterSpacing: 1,
-                            flexShrink: 0,
-                        }}>
-                            {roleLabel}
-                        </span>
-                        {judgeName && (
-                            <span style={{
-                                fontWeight: 600, fontSize: 'clamp(0.8rem, 1.7vw, 1.15rem)',
-                                color: 'rgba(255,255,255,0.92)',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {judgeName}
-                            </span>
-                        )}
-                    </div>
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 'clamp(10px, 2vw, 24px)',
-                        fontSize: 'clamp(0.7rem, 1.5vw, 1rem)', fontWeight: 600,
-                        color: 'rgba(255,255,255,0.85)', minWidth: 0,
-                    }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {athlete?.catName || '—'}{routineLabel}
-                        </span>
-                        <span style={{
-                            fontFamily: "'Space Mono', monospace", fontWeight: 700,
-                            background: 'rgba(0,0,0,0.25)', padding: '2px 10px', borderRadius: 6,
-                            flexShrink: 0,
-                        }}>
-                            {eTotal.toFixed(1)}
-                        </span>
-                    </div>
-                </div>
-                {/* Satır 2: sahadaki sporcu + kulüp */}
-                <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'rgba(255,255,255,0.14)',
-                    padding: 'clamp(4px, 0.9vh, 9px) clamp(14px, 2.5vw, 28px)',
-                    gap: 12,
-                }}>
-                    <span style={{
-                        fontWeight: 700, fontSize: 'clamp(0.78rem, 1.7vw, 1.1rem)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR…'}
-                    </span>
-                    <span style={{
-                        fontWeight: 700, fontSize: 'clamp(0.7rem, 1.5vw, 1rem)',
-                        color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {athlete ? getAthleteClub(athlete) : ''}
-                    </span>
-                </div>
-            </header>
+            <JudgeHeader
+                connected={connected}
+                roleLabel={roleLabel}
+                judgeName={judgeName}
+                rightText={`${athlete?.catName || '—'}${routineLabel}`}
+                rightValue={eTotal.toFixed(1)}
+                athleteName={athlete ? getAthleteName(athlete) : 'SPORCU BEKLENİYOR…'}
+                club={athlete ? getAthleteClub(athlete) : ''}
+            />
 
             {/* Submit Overlay — E hakem */}
             {submitted && (
@@ -842,3 +766,78 @@ const correctBtnStyle = {
     letterSpacing: 1, cursor: 'pointer',
     fontFamily: "'Outfit', sans-serif",
 };
+
+// ── Ortak Başlık ──────────────────────────────────────────────────────────
+// E ve D ekranları aynı başlığı kullanır: üstte hakem (rol + adı) ve sağda
+// kategori/seri + anlık değer, altındaki açık şeritte sahadaki sporcu + kulüp.
+function JudgeHeader({ connected, roleLabel, judgeName, rightText, rightValue, athleteName, club }) {
+    return (
+        <header style={{ flexShrink: 0, zIndex: 100 }}>
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: 'clamp(6px, 1.2vh, 12px) clamp(14px, 2.5vw, 28px)', gap: 12,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div style={{
+                        width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                        background: connected ? '#4ade80' : '#64748b',
+                        boxShadow: connected ? '0 0 10px #4ade80' : 'none',
+                    }} />
+                    <span style={{
+                        fontWeight: 800, fontSize: 'clamp(0.85rem, 1.9vw, 1.25rem)',
+                        letterSpacing: 1, flexShrink: 0,
+                    }}>
+                        {roleLabel}
+                    </span>
+                    {judgeName && (
+                        <span style={{
+                            fontWeight: 600, fontSize: 'clamp(0.8rem, 1.7vw, 1.15rem)',
+                            color: 'rgba(255,255,255,0.92)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                            {judgeName}
+                        </span>
+                    )}
+                </div>
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 'clamp(10px, 2vw, 24px)',
+                    fontSize: 'clamp(0.7rem, 1.5vw, 1rem)', fontWeight: 600,
+                    color: 'rgba(255,255,255,0.85)', minWidth: 0,
+                }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {rightText}
+                    </span>
+                    <span style={{
+                        fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                        background: 'rgba(0,0,0,0.25)', padding: '2px 10px', borderRadius: 6,
+                        flexShrink: 0,
+                    }}>
+                        {rightValue}
+                    </span>
+                </div>
+            </div>
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: 'rgba(255,255,255,0.14)',
+                padding: 'clamp(4px, 0.9vh, 9px) clamp(14px, 2.5vw, 28px)', gap: 12,
+            }}>
+                <span style={{
+                    fontWeight: 700, fontSize: 'clamp(0.78rem, 1.7vw, 1.1rem)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                    {athleteName}
+                </span>
+                <span style={{
+                    fontWeight: 700, fontSize: 'clamp(0.7rem, 1.5vw, 1rem)',
+                    color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                    {club}
+                </span>
+            </div>
+        </header>
+    );
+}
+
+// E ve D ekranlarının ortak zemini
+const SCREEN_BG = 'linear-gradient(115deg, #3b1d8f 0%, #6d1f7a 45%, #b81f3a 78%, #d92036 100%)';
