@@ -474,6 +474,9 @@ export function computeTeamRanking(rows, o = {}) {
     const topN         = Number(o.topN) || 3;
     const minAthletes  = Number(o.minAthletes) || 1;
     const routineCount = Number(o.routineCount) || 2;
+    const rule         = o.scoringRule === 'max' ? 'max' : 'sum';
+
+    const nameOf = (row) => row?.name || getAthleteName(row?.a) || '—';
 
     const byClub = {};
     (rows || []).forEach(row => {
@@ -492,27 +495,56 @@ export function computeTeamRanking(rows, o = {}) {
                 o.mode === 'perRoutine' &&
                 rs.length >= (Number(o.perRoutineMinAthletes) || 4);
 
-            let teamTotal;
-            let routineBreakdown = null;
+            // Her seri için puana SAYILAN sporcular ve o serinin ara toplamı.
+            // Böylece "1. seriden kimin puanı geldi" ekranda görünebiliyor.
+            let r1Picks = [], r2Picks = [];
 
             if (perRoutine) {
+                // Her serinin en iyi N'i ayrı seçilir — farklı sporcular olabilir
                 const bestOf = (key) => [...rs]
-                    .map(r => r[key])
-                    .filter(v => v != null)
-                    .sort((a, b) => b - a)
-                    .slice(0, topN);
-                const r1Best = bestOf('r1');
-                const r2Best = routineCount >= 2 ? bestOf('r2') : [];
-                teamTotal = [...r1Best, ...r2Best].reduce((a, b) => a + b, 0);
-                routineBreakdown = {
-                    r1: r1Best.reduce((a, b) => a + b, 0),
-                    r2: r2Best.reduce((a, b) => a + b, 0),
-                };
+                    .filter(r => r[key] != null)
+                    .sort((a, b) => b[key] - a[key])
+                    .slice(0, topN)
+                    .map(r => ({ name: nameOf(r), score: r[key] }));
+                r1Picks = bestOf('r1');
+                r2Picks = routineCount >= 2 ? bestOf('r2') : [];
             } else {
-                teamTotal = byTotal.slice(0, topN).reduce((s, r) => s + r.total, 0);
+                const contributors = byTotal.slice(0, topN);
+                if (rule === 'max') {
+                    // Sporcunun yalnızca İYİ olan serisi sayılır
+                    contributors.forEach(r => {
+                        const a = r.r1 ?? null, b = r.r2 ?? null;
+                        if (a == null && b == null) return;
+                        const useR1 = b == null || (a != null && a >= b);
+                        if (useR1) r1Picks.push({ name: nameOf(r), score: a });
+                        else r2Picks.push({ name: nameOf(r), score: b });
+                    });
+                } else {
+                    contributors.forEach(r => {
+                        if (r.r1 != null) r1Picks.push({ name: nameOf(r), score: r.r1 });
+                        if (routineCount >= 2 && r.r2 != null) r2Picks.push({ name: nameOf(r), score: r.r2 });
+                    });
+                }
             }
 
-            return { club, members: byTotal, top3: byTotal.slice(0, topN), teamTotal, perRoutine, routineBreakdown };
+            const sum = (arr) => arr.reduce((a, p) => a + (p.score || 0), 0);
+            const routines = [
+                { key: 'r1', label: '1. Seri', picks: r1Picks, subtotal: sum(r1Picks) },
+                ...(routineCount >= 2
+                    ? [{ key: 'r2', label: '2. Seri', picks: r2Picks, subtotal: sum(r2Picks) }]
+                    : []),
+            ];
+
+            const teamTotal = routines.reduce((a, r) => a + r.subtotal, 0);
+
+            return {
+                club,
+                members: byTotal,
+                top3: byTotal.slice(0, topN),
+                teamTotal,
+                perRoutine,
+                routines,
+            };
         });
 
     teams.sort((a, b) => b.teamTotal - a.teamTotal);

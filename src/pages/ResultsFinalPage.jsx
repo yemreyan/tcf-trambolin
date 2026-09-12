@@ -207,6 +207,7 @@ export default function ResultsFinalPage() {
             mode: catRules.teamMode,
             perRoutineMinAthletes: catRules.teamPerRoutineMinAthletes,
             routineCount: catRules.routineCount,
+            scoringRule: catRules.scoringRule,
         });
     }, [
         individualRanking, currentCat, rules.flow.teamTopN,
@@ -457,6 +458,7 @@ export default function ResultsFinalPage() {
                 mode: cr.teamMode,
                 perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
                 routineCount: cr.routineCount,
+                scoringRule: cr.scoringRule,
             });
             if (teams.length === 0) return;
 
@@ -468,24 +470,24 @@ export default function ResultsFinalPage() {
                 <table>
                     <thead>
                         <tr>
-                            <th class="c" style="width:52px">SIRA</th>
-                            <th>KULÜP</th>
-                            <th class="c" style="width:78px">SPORCU</th>
-                            <th>PUANA SAYILANLAR</th>
-                            <th class="c" style="width:92px">TOPLAM</th>
+                            <th class="c" style="width:48px">SIRA</th>
+                            <th style="width:150px">KULÜP</th>
+                            ${teams[0].routines.map(rt => `<th>${rt.label.toUpperCase()} — PUANA SAYILANLAR</th>`).join('')}
+                            <th class="c" style="width:84px">TOPLAM</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${teams.map((t, i) => `
                             <tr class="${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">
                                 <td class="rank-col">${medal(i + 1)}</td>
-                                <td class="name-col">${esc(t.club)}</td>
-                                <td class="score-col">${t.members.length}</td>
-                                <td class="club-col">${
-                                    t.perRoutine && t.routineBreakdown
-                                        ? `1. Seri ${t.routineBreakdown.r1.toFixed(3)}${showR2 ? ` + 2. Seri ${t.routineBreakdown.r2.toFixed(3)}` : ''}`
-                                        : esc(t.top3.map(r => r.name).join(', '))
-                                }</td>
+                                <td class="name-col">${esc(t.club)}<div class="club-col">${t.members.length} sporcu</div></td>
+                                ${t.routines.map(rt => `
+                                    <td class="picks">
+                                        ${rt.picks.length === 0
+                                            ? '<span class="muted">—</span>'
+                                            : rt.picks.map(pk => `<div><span>${esc(pk.name)}</span><b>${pk.score.toFixed(3)}</b></div>`).join('')}
+                                        <div class="sub"><span>Ara toplam</span><b>${rt.subtotal.toFixed(3)}</b></div>
+                                    </td>`).join('')}
                                 <td class="total-col">${t.teamTotal.toFixed(3)}</td>
                             </tr>`).join('')}
                     </tbody>
@@ -538,6 +540,11 @@ export default function ResultsFinalPage() {
   .club-col  { font-weight:500; color:#64748b; font-size:10.5px; text-transform:uppercase; }
   .score-col { text-align:center; font-family:'Space Mono',monospace; font-size:12px; }
   .total-col { text-align:center; font-weight:900; color:#000; font-size:13px; background:#eef2f7; }
+  .picks { font-size:10.5px; }
+  .picks > div { display:flex; justify-content:space-between; gap:8px; padding:1px 0; }
+  .picks > div > b { font-family:'Space Mono',monospace; font-weight:700; color:#0f172a; }
+  .picks .sub { margin-top:3px; padding-top:3px; border-top:1px solid #cbd5e1; font-weight:800; color:#E30613; }
+  .picks .muted { color:#94a3b8; }
 
   .footer { margin-top:auto; padding-top:14px; border-top:1px solid #e2e8f0;
             display:flex; justify-content:space-between; font-size:9px; color:#94a3b8; font-weight:500; }
@@ -762,65 +769,135 @@ export default function ResultsFinalPage() {
 
                         {/* ── TAKIM SIRALAMASI ──────────────────────────── */}
                         {currentCat && activeTab === 'team' && (
-                            <div className="table-responsive">
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th style={{ width: 56 }}>Sıra</th>
-                                            <th>Kulüp</th>
-                                            <th style={{ width: 70, textAlign: 'center' }}>Üye</th>
-                                            <th>İlk 3 Sporcu/Çift</th>
-                                            <th style={{ width: 150, textAlign: 'right' }}>Takım Toplamı</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {teamRanking.length === 0 && (
-                                            <tr>
-                                                <td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>
-                                                    Henüz veri yok.
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {teamRanking.map((t, i) => {
-                                            const medal = i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : i === 2 ? '#CD7F32' : '';
-                                            return (
-                                                <tr key={t.club} style={i < 3 ? { background: `${medal}08` } : {}}>
-                                                    <td style={{
-                                                        fontFamily: "'Space Mono',monospace",
-                                                        fontWeight: 700, fontSize: '1.15rem', color: medal || 'inherit',
+                            <div>
+                                {/* Hangi yöntemle hesaplandığı açıkça yazılsın */}
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                                    background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)',
+                                    borderRadius: 10, padding: '8px 14px', marginBottom: 14,
+                                    fontSize: '0.8rem', color: '#94a3b8',
+                                }}>
+                                    <i className="material-icons-round" style={{ fontSize: 16, color: '#38bdf8' }}>info</i>
+                                    {teamRanking[0]?.perRoutine
+                                        ? <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>her serinin en iyi {rules.flow.teamTopN} puanı</strong> toplanarak hesaplanır.</span>
+                                        : catRules.scoringRule === 'max'
+                                            ? <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>en iyi {rules.flow.teamTopN} sporcunun geçerli serisi</strong> toplanarak hesaplanır.</span>
+                                            : <span>Takım puanı <strong style={{ color: '#e2e8f0' }}>en iyi {rules.flow.teamTopN} sporcunun iki serisi</strong> toplanarak hesaplanır.</span>}
+                                    <span style={{ opacity: 0.7 }}>· Takım için en az {catRules.teamMinAthletes} sporcu</span>
+                                </div>
+
+                                {teamRanking.length === 0 && (
+                                    <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+                                        Takım oluşturacak kadar sporcusu olan kulüp yok.
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {teamRanking.map((t, i) => {
+                                        const medal = i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : i === 2 ? '#CD7F32' : '';
+                                        return (
+                                            <div key={t.club} style={{
+                                                background: medal ? `${medal}0D` : 'rgba(255,255,255,0.03)',
+                                                border: `1px solid ${medal ? `${medal}44` : 'rgba(255,255,255,0.07)'}`,
+                                                borderRadius: 14, overflow: 'hidden',
+                                            }}>
+                                                {/* Üst şerit: sıra, kulüp, toplam */}
+                                                <div style={{
+                                                    display: 'flex', alignItems: 'center', gap: 14,
+                                                    padding: '12px 18px',
+                                                    background: medal ? `${medal}12` : 'rgba(255,255,255,0.02)',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                }}>
+                                                    <div style={{
+                                                        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        background: medal || 'rgba(255,255,255,0.08)',
+                                                        color: medal ? '#0f172a' : '#94a3b8',
+                                                        fontFamily: "'Space Mono',monospace", fontWeight: 700, fontSize: '1rem',
                                                     }}>
-                                                        {i < 3
-                                                            ? <i className="material-icons-round" style={{ fontSize: 22, color: medal }}>
-                                                                {i === 0 ? 'looks_one' : i === 1 ? 'looks_two' : 'looks_3'}
-                                                              </i>
-                                                            : i + 1}
-                                                    </td>
-                                                    <td><strong>{t.club}</strong></td>
-                                                    <td style={{ textAlign: 'center' }}>{t.members.length}</td>
-                                                    <td style={{ fontSize: '0.85rem' }}>
-                                                        {t.top3.map((r, idx) => (
-                                                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                                {r.a.isPair && <i className="material-icons-round" style={{ fontSize: 11, color: '#c084fc' }}>sync</i>}
-                                                                <span>{r.a.pairName || getAthleteName(r.a)}</span>
-                                                                <span style={{ color: '#38bdf8', marginLeft: 4 }}>
-                                                                    {r.total.toFixed(3)}
+                                                        {i + 1}
+                                                    </div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{
+                                                            fontWeight: 800, fontSize: '1.05rem', color: '#f1f5f9',
+                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                        }}>
+                                                            {t.club}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 1 }}>
+                                                            {t.members.length} sporcu kayıtlı
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontSize: '0.65rem', color: '#64748b', letterSpacing: 1, fontWeight: 700 }}>
+                                                            TAKIM TOPLAMI
+                                                        </div>
+                                                        <div style={{
+                                                            fontFamily: "'Space Mono',monospace", fontSize: '1.5rem',
+                                                            fontWeight: 700, color: medal || '#38bdf8', lineHeight: 1.1,
+                                                        }}>
+                                                            {t.teamTotal.toFixed(3)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Seri blokları: hangi sporcunun puanı hangi seriden geldi */}
+                                                <div style={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: `repeat(${t.routines.length}, 1fr)`,
+                                                    gap: 1, background: 'rgba(255,255,255,0.06)',
+                                                }}>
+                                                    {t.routines.map(rt => (
+                                                        <div key={rt.key} style={{ background: '#0f172a', padding: '12px 18px' }}>
+                                                            <div style={{
+                                                                display: 'flex', justifyContent: 'space-between',
+                                                                alignItems: 'baseline', marginBottom: 8,
+                                                            }}>
+                                                                <span style={{
+                                                                    fontSize: '0.7rem', fontWeight: 800, letterSpacing: 1.2,
+                                                                    color: rt.key === 'r1' ? '#fbbf24' : '#38bdf8',
+                                                                }}>
+                                                                    {rt.label.toUpperCase()}
+                                                                </span>
+                                                                <span style={{
+                                                                    fontFamily: "'Space Mono',monospace", fontWeight: 700,
+                                                                    fontSize: '1rem', color: '#e2e8f0',
+                                                                }}>
+                                                                    {rt.subtotal.toFixed(3)}
                                                                 </span>
                                                             </div>
-                                                        ))}
-                                                    </td>
-                                                    <td style={{
-                                                        textAlign: 'right',
-                                                        fontFamily: "'Space Mono',monospace",
-                                                        fontSize: '1.15rem', fontWeight: 700,
-                                                        color: medal || '#38bdf8',
-                                                    }}>
-                                                        {t.teamTotal.toFixed(3)}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                            {rt.picks.length === 0 ? (
+                                                                <div style={{ color: '#475569', fontSize: '0.8rem' }}>
+                                                                    Bu seriden puan sayılmadı
+                                                                </div>
+                                                            ) : rt.picks.map((pk, idx) => (
+                                                                <div key={idx} style={{
+                                                                    display: 'flex', justifyContent: 'space-between',
+                                                                    alignItems: 'center', gap: 10,
+                                                                    padding: '3px 0', fontSize: '0.84rem',
+                                                                    borderBottom: idx < rt.picks.length - 1 ? '1px dashed rgba(255,255,255,0.06)' : 'none',
+                                                                }}>
+                                                                    <span style={{
+                                                                        color: '#cbd5e1', overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                                    }}>
+                                                                        {pk.name}
+                                                                    </span>
+                                                                    <span style={{
+                                                                        fontFamily: "'Space Mono',monospace",
+                                                                        color: '#94a3b8', flexShrink: 0,
+                                                                    }}>
+                                                                        {pk.score.toFixed(3)}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </div>

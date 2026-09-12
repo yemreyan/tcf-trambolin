@@ -157,6 +157,7 @@ export default function ResultsLivePage() {
                     mode: cr.teamMode,
                     perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
                     routineCount: cr.routineCount,
+                    scoringRule: cr.scoringRule,
                 });
                 if (teams.length > 0) out.push({ cat, page: 0, totalPages: 1, kind: 'team' });
             }
@@ -292,6 +293,7 @@ export default function ResultsLivePage() {
             mode: cr.teamMode,
             perRoutineMinAthletes: cr.teamPerRoutineMinAthletes,
             routineCount: cr.routineCount,
+            scoringRule: cr.scoringRule,
         });
     })();
     const pageStart = currentView ? currentView.page * ATHLETES_PER_PAGE : 0;
