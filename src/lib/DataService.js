@@ -8,6 +8,7 @@ import {
     ref, get, set, update, remove, push, onValue
 } from 'firebase/database';
 import { db } from './firebase';
+import { DEFAULT_RULES } from './Rules';
 
 /**
  * Firebase undefined değerlere izin vermiyor.
@@ -123,15 +124,19 @@ export function standardizeId(rawName, prefix = 'cat') {
 // Not: JudgeCockpitPage `deductions` alanı olarak yazar (HTML ile uyumlu).
 // Bireysel: base = elementCount × 2 (maks 20.0)
 // Senkron:  base = elementCount × 1 (maks 10.0)  ← FIG Senkron kuralı
-export function calcEScore(judgesData, elementCount = 10, isSync = false) {
-    const base = isSync ? elementCount : elementCount * 2;
+export function calcEScore(judgesData, elementCount = 10, isSync = false, scoring = DEFAULT_RULES.scoring) {
+    const r = { ...DEFAULT_RULES.scoring, ...(scoring || {}) };
+    const base = elementCount * (isSync ? r.basePerElementSync : r.basePerElementIndividual);
 
+    // Eleme: yeterli not varsa en yüksek trimHigh ve en düşük trimLow atılır.
+    // Varsayılan (6 hakem, 2+2) eski davranışın birebir aynısıdır.
     function trimDeductions(arr) {
-        if (arr.length >= 6) {
+        if (arr.length >= r.minJudgesForTrim) {
             arr.sort((a, b) => a - b);
-            arr.pop(); arr.pop();     // 2 yüksek
-            arr.shift(); arr.shift(); // 2 düşük
+            for (let i = 0; i < r.trimHigh && arr.length > 1; i++) arr.pop();
+            for (let i = 0; i < r.trimLow && arr.length > 1; i++) arr.shift();
         } else if (arr.length >= 4) {
+            // Eksik hakemle çalışılıyorsa daha ihtiyatlı ele: birer uç
             arr.sort((a, b) => a - b);
             arr.pop();
             if (arr.length > 2) arr.pop();
@@ -143,11 +148,9 @@ export function calcEScore(judgesData, elementCount = 10, isSync = false) {
 
     let totalDeduction = 0;
 
-    // Her element için per-element trimming
-    // Alan adı: `deductions` (HTML CJP ile uyumlu, eski `scores` değil)
     for (let elIdx = 0; elIdx < elementCount; elIdx++) {
         const elDeducts = [];
-        for (let j = 1; j <= 6; j++) {
+        for (let j = 1; j <= r.eJudgeCount; j++) {
             const jData = judgesData[`e${j}`];
             if (jData) {
                 // `deductions` önce, geriye dönük uyumluluk için `scores` de dene
@@ -160,9 +163,8 @@ export function calcEScore(judgesData, elementCount = 10, isSync = false) {
         totalDeduction += trimDeductions(elDeducts);
     }
 
-    // Landing trimming
     const landingArr = [];
-    for (let j = 1; j <= 6; j++) {
+    for (let j = 1; j <= r.eJudgeCount; j++) {
         const jData = judgesData[`e${j}`];
         if (jData && jData.landing !== undefined && jData.landing !== null && jData.landing !== '') {
             landingArr.push(parseFloat(jData.landing) || 0);
@@ -243,13 +245,15 @@ export function computeRoutineTotals(r1d, r2d, rule) {
  * Büyük / 17+ / senior → 'max' (R1 ve R2'nin maksimumu)
  * Diğerleri → 'sum' (R1 + R2 toplamı)
  */
-export function getScoringRule(category) {
-    if (!category) return 'sum';
+export function getScoringRule(category, flow = DEFAULT_RULES.flow) {
+    const r = { ...DEFAULT_RULES.flow, ...(flow || {}) };
+    if (!category) return r.defaultScoringRule;
     if (category.scoringRule) return category.scoringRule;
-    const seniorKeywords = ['buyuk', 'büyük', '17+', '17_yas', 'senior', 'buyukler', 'büyükler', '21+'];
     const haystack = [category.name, category.ageGroup, category.id]
         .filter(Boolean).join(' ').toLowerCase();
-    return seniorKeywords.some(k => haystack.includes(k)) ? 'max' : 'sum';
+    return (r.maxRuleKeywords || []).some(k => haystack.includes(String(k).toLowerCase()))
+        ? 'max'
+        : r.defaultScoringRule;
 }
 
 // ── DataStore (Yarışma CRUD) ───────────────────────────────────────────────

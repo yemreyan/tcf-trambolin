@@ -26,13 +26,16 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
+import { useRules } from '../lib/Rules';
 
-const ATHLETES_PER_PAGE = 10;
-const CYCLE_MS = 8000;
+
 
 export default function ResultsLivePage() {
     const [params] = useSearchParams();
     const compId = params.get('comp') || params.get('id') || localStorage.getItem('tra_active_comp');
+    const rules = useRules(compId);
+    const ATHLETES_PER_PAGE = rules.session.athletesPerPage;
+    const CYCLE_MS = rules.session.liveCycleSeconds * 1000;
 
     const [compName,    setCompName]    = useState('');
     const [categories,  setCategories]  = useState({});
@@ -146,14 +149,14 @@ export default function ResultsLivePage() {
             }
         });
         return out;
-    }, [categories, athletes, pairs, excluded]);
+    }, [categories, athletes, pairs, excluded, ATHLETES_PER_PAGE]);
 
     // Otomatik döngü
     useEffect(() => {
         if (views.length === 0) return;
         const t = setInterval(() => setViewIndex(i => (i + 1) % views.length), CYCLE_MS);
         return () => clearInterval(t);
-    }, [views.length]);
+    }, [views.length, CYCLE_MS]);
 
     useEffect(() => {
         if (viewIndex >= views.length && views.length > 0) setViewIndex(0);
@@ -163,7 +166,7 @@ export default function ResultsLivePage() {
 
     // ── Sıralama hesapla ──────────────────────────────────────────────────
     function computeRanking(cat) {
-        const rule   = getScoringRule(cat);
+        const rule   = getScoringRule(cat, rules.flow);
         const isSync = cat.type === 'sync';
 
         // Pair lookup map (pair.id → pair) — kategoriden bağımsız

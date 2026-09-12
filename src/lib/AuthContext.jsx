@@ -136,10 +136,12 @@ export function AuthProvider({ children }) {
     };
 
     // ── İnaktivite Sayacı ─────────────────────────────────────────────────
-    const startInactivityTimer = useCallback((onLock) => {
+    // timeoutMs verilmezse varsayılan süre kullanılır (yarışma kuralından gelir)
+    const startInactivityTimer = useCallback((onLock, timeoutMs) => {
+        const wait = Number(timeoutMs) > 0 ? Number(timeoutMs) : INACTIVITY_TIMEOUT;
         const reset = () => {
             if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-            inactivityTimer.current = setTimeout(onLock, INACTIVITY_TIMEOUT);
+            inactivityTimer.current = setTimeout(onLock, wait);
             // session timestamp yenile
             const s = getJudgeSession();
             if (s) saveJudgeSession(s.compId, s.panel, s.role);

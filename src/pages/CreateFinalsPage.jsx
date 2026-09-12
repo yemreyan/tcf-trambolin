@@ -27,11 +27,13 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
 import { getScoringRule, computeRoutineTotals } from '../lib/DataService';
+import { useRules } from '../lib/Rules';
 
 export default function CreateFinalsPage() {
     const navigate = useNavigate();
     const { getActiveCompId } = useAuth();
     const { toast, confirm } = useNotification();
+    const rules = useRules(getActiveCompId());
 
     const compId = getActiveCompId();
 
@@ -78,7 +80,7 @@ export default function CreateFinalsPage() {
             const filtered = Object.values(athletes).filter(a =>
                 (a.category === catId) || (a.categoryId === catId) || (a.catId === catId)
             );
-            const rule = getScoringRule(cat);
+            const rule = getScoringRule(cat, rules.flow);
             const ranked = filtered.map(a => {
                 const res = scores[a.uniqueId] || scores[a.id] || {};
                 // DNS/DNF → sıralama dışı; her iki serisi de geçersizse sporcu
@@ -88,8 +90,8 @@ export default function CreateFinalsPage() {
             }).filter(x => x.scored);
             ranked.sort((x, y) => y.total - x.total);
 
-            const finalists = ranked.slice(0, 8);
-            const reserves = ranked.slice(8, 10);
+            const finalists = ranked.slice(0, rules.flow.finalistCount);
+            const reserves = ranked.slice(rules.flow.finalistCount, rules.flow.finalistCount + rules.flow.reserveCount);
 
             if (finalists.length < 2) {
                 toast('Yeterli sporcu yok (en az 2 sporcu gerekli)', 'error');
@@ -97,8 +99,10 @@ export default function CreateFinalsPage() {
             }
 
             // A ve B gruplarını karıştır
-            const groupA = finalists.slice(0, 4).map(x => x.a);
-            const groupB = finalists.slice(4, 8).map(x => x.a);
+            // Finalist sayısı kuraldan geldiği için gruplar ortadan bölünür
+            const half = Math.ceil(finalists.length / 2);
+            const groupA = finalists.slice(0, half).map(x => x.a);
+            const groupB = finalists.slice(half).map(x => x.a);
             const shuffle = (arr) => {
                 for (let i = arr.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));

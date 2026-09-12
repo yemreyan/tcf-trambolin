@@ -23,12 +23,14 @@ import {
 } from '../lib/DataService';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
+import { useRules } from '../lib/Rules';
 import PasswordGate from '../components/PasswordGate';
 
 export default function CJPPage() {
     const [params] = useSearchParams();
     const { checkJudgeAccess, saveJudgeSession, isJudgeSessionValid, startInactivityTimer, clearJudgeSession } = useAuth();
     const { toast, confirm } = useNotification();
+    const rules = useRules(params.get('comp') || localStorage.getItem('tra_active_comp'));
 
     const compId = params.get('comp') || localStorage.getItem('tra_active_comp');
     const panelParam = params.get('panel') || localStorage.getItem('cjp_panel') || 'A';
@@ -91,9 +93,10 @@ export default function CJPPage() {
     // Artık kopya hiç silinmiyor; sahadaki sporcu seçili değilken kullanılmıyor.
     const isSelectedOnField = !!selected && liveActiveAthId === selected.uniqueId;
     const activeJudges = isSelectedOnField ? judgesData : {};
+    const eJudgeIds = Array.from({ length: rules.scoring.eJudgeCount }, (_, i) => `e${i + 1}`);
 
     // Bireysel: base 20, Senkron: base 10
-    const eScore = calcEScore(activeJudges, elementCount, isSync);
+    const eScore = calcEScore(activeJudges, elementCount, isSync, rules.scoring);
 
     // D: önce D hakeminden oku, yoksa manuel girişi kullan
     const dFromJudge = getDScoreFromJudge(activeJudges);
@@ -108,7 +111,7 @@ export default function CJPPage() {
 
     // Hesaplanan ara değerler
     const hEffective = isSync ? (h1Val + h2Val) / 2 : h1Val; // Sync: (H1+H2)/2 | Bireysel: H
-    const sEffective = isSync ? sVal * 2 : 0;                 // Sync: S×2 | Bireysel: 0
+    const sEffective = isSync ? sVal * rules.scoring.syncSMultiplier : 0;                 // Sync: S×2 | Bireysel: 0
 
     // Total (orijinal HTML cjp.html formülü):
     //   Bireysel → E + H + D + T - P - DP          (H pozitif, EKLENIR)
@@ -237,8 +240,8 @@ export default function CJPPage() {
     // gösterilmediği için ekran normal görünüp Firebase'den sessizce kopuyordu.
     useEffect(() => {
         if (!unlocked || noPassword) return;
-        startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); });
-    }, [unlocked, noPassword]);
+        startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); }, rules.session.inactivityMinutes * 60 * 1000);
+    }, [unlocked, noPassword, rules.session.inactivityMinutes]);
 
     // ── Sporcu seçimi ─────────────────────────────────────────────────────
     function selectAthlete(ath) {
@@ -770,7 +773,7 @@ export default function CJPPage() {
                             {/* Hakem rozetleri — yeşil: gönderdi, sarı: giriyor, gri: veri yok.
                                 Tıklanınca sadece o hakemin notu iptal edilir. */}
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12, flexWrap: 'wrap' }}>
-                                {['e1','e2','e3','e4','e5','e6'].map(jId => {
+                                {eJudgeIds.map(jId => {
                                     const j = activeJudges[jId];
                                     const submitted = j?.submitted === true;
                                     const hasData   = j && (j.deductions || j.scores);
@@ -801,7 +804,7 @@ export default function CJPPage() {
                                 })}
                             </div>
                             {/* Tüm hakemler gönderdi bildirimi */}
-                            {['e1','e2','e3','e4','e5','e6'].every(jId => activeJudges[jId]?.submitted) && (
+                            {eJudgeIds.every(jId => activeJudges[jId]?.submitted) && (
                                 <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#10b981', fontWeight: 700, letterSpacing: 1 }}>
                                     ✓ TÜM HAKEMLER GÖNDERDİ
                                 </div>
@@ -1006,7 +1009,7 @@ export default function CJPPage() {
                         Değerlendirilecek Hareket Sayısı
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-                        {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        {Array.from({ length: rules.judgeInput.maxElements }, (_, i) => i + 1).map(n => (
                             <button
                                 key={n}
                                 onClick={() => { setElementCount(n); setShowElementPopup(false); }}

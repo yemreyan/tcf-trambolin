@@ -27,6 +27,7 @@ import {
     getScoringRule, getAthleteName, getAthleteClub,
     isDNX, formatResultScore, computeRoutineTotals, getPairDisplayName,
 } from '../lib/DataService';
+import { useRules } from '../lib/Rules';
 
 export default function ResultsFinalPage() {
     const navigate  = useNavigate();
@@ -34,6 +35,7 @@ export default function ResultsFinalPage() {
     const { toast } = useNotification();
 
     const compId = getActiveCompId();
+    const rules = useRules(compId);
 
     const [comp,        setComp]        = useState(null);
     const [categories,  setCategories]  = useState({});
@@ -88,7 +90,7 @@ export default function ResultsFinalPage() {
     }, [compId]);
 
     const currentCat = categories[selectedCatId] || null;
-    const rule       = currentCat ? getScoringRule(currentCat) : 'sum';
+    const rule       = currentCat ? getScoringRule(currentCat, rules.flow) : rules.flow.defaultScoringRule;
     const isSync     = currentCat?.type === 'sync';
 
 
@@ -204,13 +206,13 @@ export default function ResultsFinalPage() {
         });
         const teams = Object.entries(byClub).map(([club, rows]) => {
             rows.sort((a, b) => b.total - a.total);
-            const top3 = rows.slice(0, 3);
+            const top3 = rows.slice(0, rules.flow.teamTopN);
             const teamTotal = top3.reduce((s, r) => s + r.total, 0);
             return { club, members: rows, top3, teamTotal };
         });
         teams.sort((a, b) => b.teamTotal - a.teamTotal);
         return teams;
-    }, [individualRanking, currentCat]);
+    }, [individualRanking, currentCat, rules.flow.teamTopN]);
 
     // ── Formatlama yardımcıları ───────────────────────────────────────────
     const fmtScore = (val, status) => formatResultScore(val, status, '-');
@@ -249,7 +251,7 @@ export default function ResultsFinalPage() {
         const wb = XLSX.utils.book_new();
 
         Object.values(categories).forEach(cat => {
-            const r = getScoringRule(cat);
+            const r = getScoringRule(cat, rules.flow);
             const catIsSync = cat.type === 'sync';
             const aoa = [['Sıra', 'Ad Soyad', 'Kulüp', 'R1', 'R2', 'Toplam']];
             const rows = [];
@@ -320,7 +322,7 @@ export default function ResultsFinalPage() {
 
         // ── Her kategori için sıralama oluştur ───────────────────────────
         function buildRows(cat) {
-            const r       = getScoringRule(cat);
+            const r       = getScoringRule(cat, rules.flow);
             const catSync = cat.type === 'sync';
             const rows    = [];
             const pById   = {};
@@ -381,7 +383,7 @@ export default function ResultsFinalPage() {
         const catBlocks = cats.map(cat => {
             const rows = buildRows(cat);
             if (rows.length === 0) return '';
-            const ruleLabel = getScoringRule(cat) === 'max' ? 'GEÇERLİ = MAX(R1,R2)' : 'TOPLAM = R1 + R2';
+            const ruleLabel = getScoringRule(cat, rules.flow) === 'max' ? 'GEÇERLİ = MAX(R1,R2)' : 'TOPLAM = R1 + R2';
             const syncLabel = cat.type === 'sync' ? ' <span class="badge-sync">SENKRONİZE</span>' : '';
 
             const trs = rows.map(x => `

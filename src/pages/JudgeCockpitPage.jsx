@@ -17,15 +17,11 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { getAthleteName, getAthleteClub } from '../lib/DataService';
 import PasswordGate from '../components/PasswordGate';
+import { useRules } from '../lib/Rules';
 
-const DEDUCT_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5];
-const LANDING_OPTIONS = [0.0, 0.1, 0.2, 0.3, 0.5, 1.0];
-const JUMP_COUNT = 10;
-
-// Ortak tuş takımı — onda birlik tam sayı olarak yazılır (3 → 0.3, 10 → 1.0).
-// Seçili kutunun izin verdiği değerler dışındakiler pasifleşir: sıçramada
-// 1.0, inişte 0.4 geçerli değil.
-const KEYPAD = [0, 1, 2, 3, 4, 5, 10];
+// Kesinti/iniş seçenekleri ve hareket sayısı yarışma kurallarından gelir
+// (Kurallar ekranı). Tuş takımı bu seçeneklerin birleşiminden üretilir;
+// seçili kutuda geçerli olmayan tuş pasifleşir.
 
 export default function JudgeCockpitPage() {
     const [params] = useSearchParams();
@@ -35,6 +31,15 @@ export default function JudgeCockpitPage() {
     const role    = params.get('role')  || 'judge-e';
     const judgeN  = params.get('id')    || '1';
     const panel   = params.get('panel') || 'A';
+
+    const rules = useRules(compId);
+    const DEDUCT_OPTIONS  = rules.judgeInput.deductOptions;
+    const LANDING_OPTIONS = rules.judgeInput.landingOptions;
+    const JUMP_COUNT      = rules.judgeInput.maxElements;
+    // Tuş takımı: iki seçenek kümesinin birleşimi, onda birlik tam sayı olarak
+    const KEYPAD = [...new Set([...DEDUCT_OPTIONS, ...LANDING_OPTIONS])]
+        .sort((a, b) => a - b)
+        .map(v => Math.round(v * 10));
 
     const isD = role === 'judge-d';
 
@@ -103,7 +108,7 @@ export default function JudgeCockpitPage() {
         setSubmitted(false);
         setEntered(Array(JUMP_COUNT).fill(false));
         setLandingEntered(false);
-    }, []);
+    }, [JUMP_COUNT]);
 
     // Firebase'deki kendi kaydından durumu geri yükle (sayfa yenilenmesi,
     // tabletin uyuması, sekmenin kapanıp açılması).
@@ -136,7 +141,21 @@ export default function JudgeCockpitPage() {
         if (data.val != null) setDVal(String(data.val));
         // Gönderilmiş bir not yenilendiğinde yine gönderilmiş görünmeli
         setSubmitted(data.submitted === true);
-    }, []);
+    }, [JUMP_COUNT]);
+
+    // maxElements kuraldan geldiği için değişebilir; diziler buna göre
+    // yeniden boyutlanmazsa fazladan kutular boşta kalır ve girilemez.
+    useEffect(() => {
+        const fit = (arr, fill) => {
+            const next = Array(JUMP_COUNT).fill(fill);
+            (arr || []).slice(0, JUMP_COUNT).forEach((v, i) => { next[i] = v; });
+            return next;
+        };
+        deductionsRef.current = fit(deductionsRef.current, 0);
+        enteredRef.current    = fit(enteredRef.current, false);
+        setDeductions(d => fit(d, 0));
+        setEntered(e => fit(e, false));
+    }, [JUMP_COUNT]);
 
     // ── Hakemin adı ───────────────────────────────────────────────────────
     // URL'deki panel parametresi jüri paneli id'si ile aynı (JuryPage linkleri
@@ -245,8 +264,8 @@ export default function JudgeCockpitPage() {
     // ekrana hiç düşmüyor, ancak sayfa yenilenince geliyordu.
     useEffect(() => {
         if (!unlocked || noPassword) return;
-        startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); });
-    }, [unlocked, noPassword]);
+        startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); }, rules.session.inactivityMinutes * 60 * 1000);
+    }, [unlocked, noPassword, rules.session.inactivityMinutes]);
 
     // ── Firebase'e yaz ───────────────────────────────────────────────────
     // Doğru path: live/{compId}/panels/{panel}/scores/judges/{judgeKey}
@@ -316,7 +335,7 @@ export default function JudgeCockpitPage() {
     // İniş (L) yalnızca tam seride puanlanır: hareket sayısı 10'un altındaysa
     // seri tamamlanmamış demektir, L kutusu hiç gösterilmez ve toplama girmez.
     const shownJumps  = elementCount || JUMP_COUNT;
-    const showLanding = shownJumps >= JUMP_COUNT;
+    const showLanding = shownJumps >= rules.judgeInput.landingMinElements;
 
     // ── Ortak tuş takımı ──────────────────────────────────────────────────
     const isLandingFocused = showLanding && focused === JUMP_COUNT;
@@ -528,7 +547,7 @@ export default function JudgeCockpitPage() {
                         display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
                         gap: 'clamp(5px, 1vw, 12px)',
                     }}>
-                        {[7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5].map(v => {
+                        {rules.judgeInput.dQuickValues.map(v => {
                             const isCurrent = parseFloat(dVal) === v;
                             return (
                                 <button

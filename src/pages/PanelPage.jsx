@@ -147,6 +147,12 @@ export default function PanelPage() {
                     />
 
                     <MenuCard
+                        icon="rule" title="Yarışma Kuralları" desc="Puanlama, eleme ve akış ayarları"
+                        onClick={() => navigate('/rules')}
+                        accentColor="#f59e0b"
+                    />
+
+                    <MenuCard
                         icon="vpn_key" title="Şifre Yönetimi" desc="Hakem şifrelerini yönet"
                         onClick={() => navigate('/password-admin')}
                         accentColor="#f43f5e"
