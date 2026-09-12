@@ -199,6 +199,9 @@ export default function RulesPage() {
                     <KeywordMinField g="flow" k="teamTopNByKeyword" label="Kategoriye göre sayılan sporcu"
                         hint="Kategori adında anahtar kelime geçiyorsa takım puanı bu kadar sporcudan hesaplanır; sayıya girmeyenler listede üstü çizili görünür. Biçim: kelime=sayı, virgülle ayır."
                         valueKey="n" fallback={3} draft={draft} set={set} />
+                    <KeywordMinField g="flow" k="teamModeByKeyword" label="Kategoriye göre takım yöntemi"
+                        hint="perRoutine → her serinin en iyi N puanı ayrı seçilip toplanır (1. serinin en iyi 2'si + 2. serinin en iyi 2'si). Biçim: kelime=perRoutine, virgülle ayır."
+                        valueKey="mode" fallback="athleteTotal" text draft={draft} set={set} />
                     <KeywordMinField g="flow" k="teamScoringRuleByKeyword" label="Kategoriye göre takımda seri"
                         hint="max → sporcunun yalnızca en yüksek serisi takım puanına girer, diğer serisi üstü çizili görünür. Bireysel sıralamayı değiştirmez. Biçim: kelime=max, virgülle ayır."
                         valueKey="rule" fallback="sum" text draft={draft} set={set} />

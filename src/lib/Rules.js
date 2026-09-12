@@ -72,8 +72,6 @@ export const DEFAULT_RULES = {
         //         listede üstü çizili görünür.
         // Bireysel sıralamayı DEĞİŞTİRMEZ; yalnızca takım puanını etkiler.
         teamScoringRuleByKeyword: [
-            { keyword: 'genç',  rule: 'max' },
-            { keyword: 'genc',  rule: 'max' },
             { keyword: 'büyük', rule: 'max' },
             { keyword: 'buyuk', rule: 'max' },
         ],
@@ -85,6 +83,15 @@ export const DEFAULT_RULES = {
         // perRoutine yalnızca kulüpte bu kadar sporcu varsa uygulanır;
         // altındaysa athleteTotal'a düşülür.
         teamPerRoutineMinAthletes: 4,
+        // Kategori adına göre takım puanı yöntemi.
+        //  'perRoutine' → her serinin en iyi N puanı AYRI seçilip toplanır
+        //                 (1. serinin en iyi 2'si + 2. serinin en iyi 2'si).
+        //  min          → bu yöntem için gereken en az sporcu (yoksa genel değer).
+        // Genç'te takım, sporcu toplamı üzerinden değil seri bazında kurulur.
+        teamModeByKeyword: [
+            { keyword: 'genç', mode: 'perRoutine', min: 2 },
+            { keyword: 'genc', mode: 'perRoutine', min: 2 },
+        ],
         // FİNAL kategorisinde takım sıralaması hangi puanlardan hesaplanır?
         //  'qualification' → ELEME kategorisinin puanları (resmî uygulama).
         //                    Finalde kulüp başına 1-2 sporcu kaldığı için
@@ -184,6 +191,16 @@ export function resolveCategoryRules(rules, category) {
     const inheritedRule = getScoringRuleFromKeywords(category, flow);
     const scoringRule = pick('scoringRule', category?.scoringRule || inheritedRule);
 
+    const modeRule = resolveTeamModeRule(category, flow);
+    const teamMinAthletes =
+        Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes;
+
+    // Kategori adı seri bazlı yöntemi zorunlu kılıyorsa, eşik varsayılan 4'e
+    // takılıp sporcu toplamına düşmemeli: takım eşiği neyse o geçerlidir.
+    const perRoutineMin = modeRule?.mode === 'perRoutine'
+        ? (modeRule.min ?? teamMinAthletes)
+        : flow.teamPerRoutineMinAthletes;
+
     return {
         scoringRule,
         routineCount: Number(pick('routineCount', flow.routineCount)) || flow.routineCount,
@@ -191,17 +208,15 @@ export function resolveCategoryRules(rules, category) {
         // Senkron kategorilerde takım sıralaması yapılmaz. Kategoride açıkça
         // aksi belirtilmediyse kapalıdır.
         hasTeam:      pick('hasTeam', category?.type === 'sync' ? false : flow.hasTeam) !== false,
-        teamMode:     pick('teamMode', flow.teamMode),
+        teamMode:     pick('teamMode', modeRule?.mode || flow.teamMode),
         teamTopN:
             Number(pick('teamTopN', resolveTeamTopN(category, flow))) || flow.teamTopN,
         // Takımda seri kuralı — bireysel sıralamadan bağımsızdır.
         teamScoringRule:
             pick('teamScoringRule', resolveTeamScoringRule(category, flow) || scoringRule),
-        teamMinAthletes:
-            Number(pick('teamMinAthletes', resolveTeamMin(category, flow))) || flow.teamMinAthletes,
+        teamMinAthletes,
         teamPerRoutineMinAthletes:
-            Number(pick('teamPerRoutineMinAthletes', flow.teamPerRoutineMinAthletes))
-            || flow.teamPerRoutineMinAthletes,
+            Number(pick('teamPerRoutineMinAthletes', perRoutineMin)) || flow.teamPerRoutineMinAthletes,
         finalTeamSource: pick('finalTeamSource', flow.finalTeamSource) || 'qualification',
     };
 }
@@ -227,6 +242,22 @@ export function resolveTeamSourceCategory(rules, category, categories) {
     const parentId = category.parentCategoryId;
     const parent = parentId ? (categories?.[parentId] || null) : null;
     return parent || category;
+}
+
+/**
+ * Takım puanı yöntemi — kategori adına göre. Eşleşme yoksa null döner.
+ * Dönen nesne: { mode, min } — min, perRoutine için gereken en az sporcu.
+ */
+function resolveTeamModeRule(category, flow) {
+    if (!category || category.type === 'sync') return null;
+    const name = String(category.name || '').toLowerCase();
+    for (const r of (flow.teamModeByKeyword || [])) {
+        const k = String(r?.keyword || '').toLowerCase();
+        if (k && name.includes(k)) {
+            return { mode: r.mode === 'perRoutine' ? 'perRoutine' : 'athleteTotal', min: Number(r.min) || undefined };
+        }
+    }
+    return null;
 }
 
 /**

@@ -30,7 +30,7 @@ import { ref, get, set, update, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { useNotification } from '../lib/NotificationContext';
-import { getScoringRule, computeRoutineTotals } from '../lib/DataService';
+import { getScoringRule, computeRoutineTotals, getAthleteName, getAthleteClub } from '../lib/DataService';
 import { useRules, resolveCategoryRules } from '../lib/Rules';
 
 export default function CreateFinalsPage() {
@@ -169,6 +169,19 @@ export default function CreateFinalsPage() {
 
             await update(ref(db), updates);
             toast(`Final oluşturuldu: ${finalists.length} finalist + ${reserves.length} yedek`, 'success');
+
+            // Yedek sayısı kuralın altındaysa nedenini söyle. Yedek ancak PUAN
+            // ALMIŞ sporcudan seçilebilir; DNS/DNF veya hiç yarışmamış sporcular
+            // sıralamaya girmediği için yedek eksik kalabiliyor.
+            if (reserves.length < rules.flow.reserveCount) {
+                const kayitli = filtered.length;
+                toast(
+                    `Yedek eksik: ${reserves.length}/${rules.flow.reserveCount}. ` +
+                    `Bu kategoride ${kayitli} sporcu kayıtlı, ${ranked.length} tanesi puan aldı. ` +
+                    `Yedek için ${rules.flow.finalistCount + rules.flow.reserveCount} puanlı sporcu gerekir.`,
+                    'warning'
+                );
+            }
             await loadAll();
         } catch (e) {
             toast('Hata: ' + e.message, 'error');
@@ -223,6 +236,160 @@ export default function CreateFinalsPage() {
         }
     }
 
+    /**
+     * Final çıkış listesi — TCF logolu A4 PDF.
+     * scope: 'all' → tüm final kategorileri, aksi halde tek kategori id'si.
+     * Yedekler R1 / R2 olarak işaretlenir.
+     */
+    function printStartList(scope) {
+        const finalCats = catList
+            .filter(c => (c.isFinal || c.id.endsWith('_final')))
+            .filter(c => scope === 'all' || c.id === scope);
+
+        if (finalCats.length === 0) {
+            toast('Yazdırılacak final kategorisi yok.', 'warning');
+            return;
+        }
+
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+        ));
+
+        // Kategorinin çıkış sırası: startList varsa o, yoksa startOrder alanı
+        function rowsOf(cat) {
+            const catAths = Object.values(athletes).filter(a =>
+                (a.category === cat.id) || (a.categoryId === cat.id) || (a.catId === cat.id)
+            );
+            const byId = {};
+            catAths.forEach(a => { byId[a.uniqueId || a.id] = a; });
+
+            let ordered;
+            if (Array.isArray(cat.startList) && cat.startList.length) {
+                ordered = cat.startList
+                    .slice()
+                    .sort((x, y) => (x.order || 0) - (y.order || 0))
+                    .map(x => byId[x.id])
+                    .filter(Boolean);
+            } else {
+                ordered = catAths.slice().sort((a, b) => (a.startOrder || 0) - (b.startOrder || 0));
+            }
+
+            // Yedekler sıranın sonunda: R1, R2 ...
+            let resIdx = 0;
+            return ordered.map((a, i) => ({
+                order: i + 1,
+                name: getAthleteName(a),
+                club: getAthleteClub(a) || a.club || '',
+                reserve: a.isReserve ? `R${++resIdx}` : '',
+            }));
+        }
+
+        let body = '';
+        finalCats.forEach(cat => {
+            const rows = rowsOf(cat);
+            if (rows.length === 0) return;
+            const yedek = rows.filter(r => r.reserve).length;
+
+            body += `
+            <div class="page">
+                <div class="header">
+                    <img class="logo" src="${window.location.origin}/tcf-logo.png" alt="TCF" />
+                    <div class="head-text">
+                        <div class="comp-name">${esc(compName || '')}</div>
+                        <h1 class="cat-name">${esc(cat.name)}</h1>
+                        <div class="sub-header">FİNAL ÇIKIŞ LİSTESİ</div>
+                    </div>
+                </div>
+                <div class="note">
+                    ${rows.length - yedek} finalist${yedek ? ` · ${yedek} yedek (R1${yedek > 1 ? ', R2' : ''})` : ''}
+                    · Çıkış sırası kura ile belirlenmiştir
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="c" style="width:64px">SIRA</th>
+                            <th>AD SOYAD</th>
+                            <th>KULÜP</th>
+                            <th class="c" style="width:72px">YEDEK</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map(r => `
+                            <tr class="${r.reserve ? 'res' : ''}">
+                                <td class="rank-col">${r.order}</td>
+                                <td class="name-col">${esc(r.name)}</td>
+                                <td class="club-col">${esc(r.club || '—')}</td>
+                                <td class="c res-col">${r.reserve || ''}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <div>TCF TRAMBOLİN CİMNASTİK SİSTEMİ</div>
+                    <div>Oluşturulma: ${new Date().toLocaleString('tr-TR')}</div>
+                </div>
+                <div class="signs">
+                    <div class="sign"><span></span>Başhakem</div>
+                    <div class="sign"><span></span>Üst Jüri</div>
+                    <div class="sign"><span></span>Teknik Sorumlu</div>
+                </div>
+            </div>`;
+        });
+
+        if (!body) { toast('Yazdırılacak sporcu bulunamadı.', 'warning'); return; }
+
+        const html = `<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<title>${esc(compName || 'Final')} — Çıkış Listesi</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  body { font-family:'Outfit',sans-serif; margin:0; color:#1e293b;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#e2e8f0; }
+  .page { width:210mm; min-height:297mm; padding:12mm; margin:0 auto 10px; background:#fff;
+          box-sizing:border-box; page-break-after:always; display:flex; flex-direction:column; }
+  .page:last-child { page-break-after:auto; }
+
+  .header { background:#E30613; color:#fff; padding:14px 18px; border-radius:12px;
+            margin-bottom:18px; display:flex; align-items:center; gap:16px; }
+  .logo { width:64px; height:64px; background:#fff; border-radius:50%; padding:4px; flex-shrink:0; object-fit:contain; }
+  .head-text { text-align:left; min-width:0; }
+  .comp-name { font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:1px; opacity:.95; }
+  .cat-name  { font-size:26px; font-weight:900; margin:2px 0 0; }
+  .sub-header{ font-size:12px; font-weight:700; letter-spacing:3px; opacity:.9; margin-top:2px; }
+
+  .note { background:#f1f5f9; border-left:4px solid #E30613; padding:7px 12px; font-size:11px;
+          color:#475569; font-weight:600; border-radius:0 6px 6px 0; margin-bottom:12px; }
+
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  thead th { background:#303868; color:#fff; padding:8px 10px; text-align:left;
+             font-size:10px; letter-spacing:1px; font-weight:800; }
+  thead th.c { text-align:center; }
+  tbody td { padding:8px 10px; border-bottom:1px solid #e2e8f0; }
+  tbody td.c { text-align:center; }
+  tbody tr:nth-child(even) { background:#f8fafc; }
+  .rank-col { text-align:center; font-family:'Space Mono',monospace; font-weight:800; font-size:14px; color:#303868; }
+  .name-col { font-weight:700; }
+  .club-col { color:#64748b; font-size:11px; }
+  .res-col  { font-family:'Space Mono',monospace; font-weight:800; color:#E30613; }
+  tbody tr.res { background:#fff7ed; }
+  tbody tr.res .name-col { color:#9a3412; }
+
+  .footer { margin-top:auto; padding-top:14px; border-top:1px solid #e2e8f0;
+            display:flex; justify-content:space-between; font-size:9px; color:#94a3b8; font-weight:500; }
+  .signs { display:flex; justify-content:space-between; gap:24px; margin-top:26px; }
+  .sign { flex:1; text-align:center; font-size:10px; color:#475569; font-weight:600; }
+  .sign span { display:block; border-top:1px solid #94a3b8; margin-bottom:5px; height:34px; }
+
+  @media print { body { background:#fff; } .page { margin:0; } }
+</style></head>
+<body>${body}<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script></body></html>`;
+
+        const w = window.open('', '_blank');
+        if (!w) { toast('Açılır pencere engellendi — tarayıcı iznini kontrol edin.', 'error'); return; }
+        w.document.write(html);
+        w.document.close();
+    }
+
     function athleteCount(catId) {
         return Object.values(athletes).filter(a =>
             (a.category === catId) || (a.categoryId === catId) || (a.catId === catId)
@@ -244,10 +411,18 @@ export default function CreateFinalsPage() {
                         <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>FİNAL OLUŞTURMA</div>
                     </div>
                 </div>
-                <button className="btn btn-outline btn-sm" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
-                    onClick={deleteAllFinals} disabled={busy}>
-                    <i className="material-icons-round">delete_sweep</i> Tümünü Sil
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-sm"
+                        style={{ background: 'linear-gradient(135deg, #E02828, #A01C1C)', color: 'white' }}
+                        onClick={() => printStartList('all')} disabled={busy}
+                        title="Tüm final kategorilerinin çıkış listesi">
+                        <i className="material-icons-round">picture_as_pdf</i> Çıkış Listesi — Tümü
+                    </button>
+                    <button className="btn btn-outline btn-sm" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                        onClick={deleteAllFinals} disabled={busy}>
+                        <i className="material-icons-round">delete_sweep</i> Tümünü Sil
+                    </button>
+                </div>
             </nav>
 
             <div className="container">
@@ -305,12 +480,20 @@ export default function CreateFinalsPage() {
                                                 </td>
                                                 <td>
                                                     {isFinal ? (
-                                                        <button className="btn btn-sm btn-outline"
-                                                            style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
-                                                            disabled={busy}
-                                                            onClick={() => deleteFinal(c.id)}>
-                                                            <i className="material-icons-round">delete</i> Sil
-                                                        </button>
+                                                        <div style={{ display: 'flex', gap: 8 }}>
+                                                            <button className="btn btn-sm"
+                                                                style={{ background: 'linear-gradient(135deg, #E02828, #A01C1C)', color: 'white' }}
+                                                                disabled={busy}
+                                                                onClick={() => printStartList(c.id)}>
+                                                                <i className="material-icons-round">picture_as_pdf</i> Çıkış Listesi
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline"
+                                                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                                                                disabled={busy}
+                                                                onClick={() => deleteFinal(c.id)}>
+                                                                <i className="material-icons-round">delete</i> Sil
+                                                            </button>
+                                                        </div>
                                                     ) : (
                                                         <button className="btn btn-sm btn-primary" disabled={busy}
                                                             onClick={() => createFinal(c.id)}>
