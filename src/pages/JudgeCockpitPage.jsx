@@ -229,16 +229,24 @@ export default function JudgeCockpitPage() {
         );
 
         return () => {
+            // Abonelik kapanıyorsa gösterge de sönsün; eskiden kopuk ekranda
+            // nokta yeşil kalıyor, hakem bağlı sanıyordu.
+            setConnected(false);
             if (unsubRef.current) unsubRef.current();
             if (ownUnsubRef.current) ownUnsubRef.current();
         };
     }, [unlocked, compId, panel, judgeKey, resetEntry, hydrateFrom]);
 
     // ── İnaktivite ────────────────────────────────────────────────────────
+    // Şifre tanımlı değilse kilit ÇALIŞTIRILMAZ. Aksi halde 10 dakika
+    // dokunulmayan ekran unlocked=false oluyor; şifre kapısı yalnızca şifre
+    // varken gösterildiği için hakem normal ekranı görmeye devam ediyor ama
+    // Firebase abonelikleri kapanmış oluyordu — sahaya çağrılan sporcu
+    // ekrana hiç düşmüyor, ancak sayfa yenilenince geliyordu.
     useEffect(() => {
-        if (!unlocked) return;
+        if (!unlocked || noPassword) return;
         startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); });
-    }, [unlocked]);
+    }, [unlocked, noPassword]);
 
     // ── Firebase'e yaz ───────────────────────────────────────────────────
     // Doğru path: live/{compId}/panels/{panel}/scores/judges/{judgeKey}

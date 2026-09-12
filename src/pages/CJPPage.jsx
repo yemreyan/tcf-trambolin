@@ -308,10 +308,12 @@ export default function CJPPage() {
     }, [unlocked, compId, currentPanel]);
 
     // ── İnaktivite ────────────────────────────────────────────────────────
+    // Şifre tanımlı değilse kilit çalıştırılmaz — kilitlendiğinde şifre kapısı
+    // gösterilmediği için ekran normal görünüp Firebase'den sessizce kopuyordu.
     useEffect(() => {
-        if (!unlocked) return;
+        if (!unlocked || noPassword) return;
         startInactivityTimer(() => { clearJudgeSession(); setUnlocked(false); });
-    }, [unlocked]);
+    }, [unlocked, noPassword]);
 
     // ── Sporcu seçimi ─────────────────────────────────────────────────────
     function selectAthlete(ath) {
