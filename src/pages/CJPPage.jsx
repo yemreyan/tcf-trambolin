@@ -415,6 +415,35 @@ export default function CJPPage() {
                     status: currentStatus,
                     judges: {},
                 });
+
+                // Canlı ekran ve skorboard da haberdar olmalı. DNS/DNF'te tüm
+                // değerler 0 yayınlanır; sıralama listelerinde DNS/DNF olarak
+                // görünmesini `status` alanı sağlar.
+                const sifirPayload = {
+                    athleteId: selected.uniqueId,
+                    categoryId: selected.catId,
+                    athleteName: getAthleteName(selected),
+                    club: getAthleteClub(selected),
+                    d: 0, e: 0, t: 0, h: 0,
+                    h1: isSync ? 0 : null,
+                    h2: isSync ? 0 : null,
+                    s: 0, sRaw: 0, p: 0, dp: 0,
+                    total: 0,
+                    status: currentStatus,
+                    isPair: isSync,
+                    pairName: selected?.pairName || null,
+                    routine: activeRoutine,
+                    timestamp: Date.now(),
+                };
+                await set(ref(db, `live/${compId}/scores/current`), sifirPayload);
+                await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/current`), {
+                    ...sifirPayload,
+                    elementDeductions: [],
+                    elementCount,
+                });
+                // Önizleme kalıntısı ekranlarda asılı kalmasın
+                await set(ref(db, `live/${compId}/panels/${currentPanel}/scores/preview`), null);
+
                 toast(`${currentStatus} yayınlandı.`, 'info');
                 setIsLocked(true);
                 if (activeRoutine === 1 && catRules.routineCount >= 2) setActiveRoutine(2);
