@@ -97,8 +97,10 @@ export default function CreateFinalsPage() {
             const finalists = ranked.slice(0, rules.flow.finalistCount);
             const reserves = ranked.slice(rules.flow.finalistCount, rules.flow.finalistCount + rules.flow.reserveCount);
 
-            if (finalists.length < 2) {
-                toast('Yeterli sporcu yok (en az 2 sporcu gerekli)', 'error');
+            // En az sporcu şartı yok — tek sporcuyla da final oluşturulabilir.
+            // Yalnızca hiç puan almış sporcu yoksa oluşturulacak bir şey kalmaz.
+            if (finalists.length === 0) {
+                toast('Bu kategoride puan almış sporcu yok — final oluşturulamaz.', 'error');
                 return;
             }
 
@@ -173,7 +175,8 @@ export default function CreateFinalsPage() {
             // Yedek sayısı kuralın altındaysa nedenini söyle. Yedek ancak PUAN
             // ALMIŞ sporcudan seçilebilir; DNS/DNF veya hiç yarışmamış sporcular
             // sıralamaya girmediği için yedek eksik kalabiliyor.
-            if (reserves.length < rules.flow.reserveCount) {
+            if (finalists.length >= rules.flow.finalistCount &&
+                reserves.length < rules.flow.reserveCount) {
                 const kayitli = filtered.length;
                 toast(
                     `Yedek eksik: ${reserves.length}/${rules.flow.reserveCount}. ` +
