@@ -244,22 +244,17 @@ export default function ResultsFinalPage() {
         return { rows: [...scored, ...unscored], cr };
     }
 
-    // Takım sıralaması hangi kategoriden beslenecek?
-    // Final kategorilerinde varsayılan kaynak ELEME kategorisidir; finalde
-    // kulüp başına 1-2 sporcu kaldığı için finalin kendi puanlarıyla takım
-    // kurulamıyordu ve liste boş görünüyordu.
-    const teamSrcCat  = resolveTeamSourceCategory(rules, currentCat, categories);
+    // Takım sıralaması yalnızca ELEME kategorilerinde yapılır.
+    // Final ve senkron kategorilerde kaynak null gelir; takım sekmesi hiç
+    // gösterilmez. Eleme kategorilerinin hesabı değişmez.
+    const teamSrcCat  = resolveTeamSourceCategory(rules, currentCat);
     const teamCr      = teamSrcCat ? resolveCategoryRules(rules, teamSrcCat) : null;
-    const teamFromQual = !!teamSrcCat && !!currentCat && teamSrcCat.id !== currentCat.id;
-    const showTeamTab = !!teamSrcCat && !!teamCr?.hasTeam;
+    const showTeamTab = !!teamSrcCat;
 
     // ── Takım Sıralaması ──────────────────────────────────────────────────
     const teamRanking = useMemo(() => {
         if (!showTeamTab) return [];
-        // Kaynak kategori final değilse zaten ekrandaki satırlar; eleme ise
-        // o kategorinin satırları yeniden kurulur.
-        const rows = teamFromQual ? buildRows(teamSrcCat).rows : individualRanking;
-        return computeTeamRanking(rows, {
+        return computeTeamRanking(individualRanking, {
             topN: teamCr.teamTopN,
             minAthletes: teamCr.teamMinAthletes,
             mode: teamCr.teamMode,
@@ -267,10 +262,7 @@ export default function ResultsFinalPage() {
             routineCount: teamCr.routineCount,
             scoringRule: teamCr.teamScoringRule,
         });
-    }, [
-        individualRanking, currentCat, categories, athletes, pairs, scores,
-        rules, showTeamTab, teamFromQual, teamSrcCat?.id,
-    ]);
+    }, [individualRanking, currentCat, rules, showTeamTab, teamSrcCat?.id]);
 
     // ── Formatlama yardımcıları ───────────────────────────────────────────
     const fmtScore = (val, status) => formatResultScore(val, status, '-');
@@ -463,16 +455,12 @@ export default function ResultsFinalPage() {
             body += page(cat, 'RESMÎ SONUÇ LİSTESİ — BİREYSEL', indTable, ruleTxt);
 
             // ── Takım ───────────────────────────────────────────────────
-            // Final kategorilerinde takım puanı kural gereği ELEME
-            // kategorisinden gelir (ekrandaki davranışın aynısı).
-            const srcCat = resolveTeamSourceCategory(rules, cat, categories);
+            // Final ve senkron kategorilerde takım sayfası basılmaz.
+            const srcCat = resolveTeamSourceCategory(rules, cat);
             if (!srcCat) return;
             const tcr = resolveCategoryRules(rules, srcCat);
-            if (!tcr.hasTeam) return;
-            const fromQual = srcCat.id !== cat.id;
-            const teamRows = fromQual ? buildRows(srcCat).rows : rows;
 
-            const teams = computeTeamRanking(teamRows, {
+            const teams = computeTeamRanking(rows, {
                 topN: tcr.teamTopN,
                 minAthletes: tcr.teamMinAthletes,
                 mode: tcr.teamMode,
@@ -488,7 +476,7 @@ export default function ResultsFinalPage() {
                     ? `Takım puanı = en iyi ${tcr.teamTopN} sporcunun EN YÜKSEK serisi · en az ${tcr.teamMinAthletes} sporcu`
                     : `Takım puanı = en iyi ${tcr.teamTopN} sporcunun toplamı · en az ${tcr.teamMinAthletes} sporcu`)
                 + ' · Üstü çizili puanlar takım toplamına girmez'
-                + (fromQual ? ` · Kaynak: ${srcCat.name} (eleme) sonuçları` : '');
+                ;
 
             const teamTable = `
                 <table>
@@ -516,12 +504,7 @@ export default function ResultsFinalPage() {
                             </tr>`).join('')}
                     </tbody>
                 </table>`;
-            body += page(
-                cat,
-                fromQual ? 'RESMÎ SONUÇ LİSTESİ — TAKIM (ELEME SONUÇLARINA GÖRE)'
-                         : 'RESMÎ SONUÇ LİSTESİ — TAKIM',
-                teamTable, teamNote,
-            );
+            body += page(cat, 'RESMÎ SONUÇ LİSTESİ — TAKIM', teamTable, teamNote);
         });
 
         if (!body) {
@@ -700,7 +683,9 @@ export default function ResultsFinalPage() {
 
                         {currentCat && activeTab === 'team' && !showTeamTab && (
                             <div className="text-center text-muted" style={{ padding: 40 }}>
-                                Bu kategoride takım sıralaması yapılmaz.
+                                {currentCat.isFinal
+                                    ? 'Finalde takım sıralaması yapılmaz — takım sonuçları eleme kategorisinde yer alır.'
+                                    : 'Bu kategoride takım sıralaması yapılmaz.'}
                             </div>
                         )}
 
@@ -809,17 +794,6 @@ export default function ResultsFinalPage() {
                         {/* ── TAKIM SIRALAMASI ──────────────────────────── */}
                         {currentCat && activeTab === 'team' && showTeamTab && (
                             <div>
-                                {teamFromQual && (
-                                    <div style={{
-                                        margin: '14px 16px 4px', padding: '10px 14px', borderRadius: 10,
-                                        background: 'rgba(124,135,216,0.10)',
-                                        border: '1px solid rgba(124,135,216,0.28)',
-                                        color: '#9aa4e6', fontSize: '0.82rem', fontWeight: 600,
-                                    }}>
-                                        Takım sıralaması <b>{teamSrcCat.name}</b> (eleme) puanlarından
-                                        hesaplanır — finalde kulüp başına yeterli sporcu kalmaz.
-                                    </div>
-                                )}
                                 {teamRanking.length === 0 && (
                                     <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
                                         Takım oluşturacak kadar sporcusu olan kulüp yok

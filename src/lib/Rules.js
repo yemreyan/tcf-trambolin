@@ -92,13 +92,6 @@ export const DEFAULT_RULES = {
             { keyword: 'genç', mode: 'perRoutine', min: 2 },
             { keyword: 'genc', mode: 'perRoutine', min: 2 },
         ],
-        // FİNAL kategorisinde takım sıralaması hangi puanlardan hesaplanır?
-        //  'qualification' → ELEME kategorisinin puanları (resmî uygulama).
-        //                    Finalde kulüp başına 1-2 sporcu kaldığı için
-        //                    finalin kendi puanlarıyla takım kurulamaz.
-        //  'final'         → yalnızca finaldeki sporcuların puanları
-        //  'none'          → final kategorisinde takım hiç gösterilmez
-        finalTeamSource: 'qualification',
     },
 
     // ── Ekran ve oturum ───────────────────────────────────────────────────
@@ -168,7 +161,6 @@ export const CATEGORY_RULE_FIELDS = {
     teamScoringRule: { label: 'Takımda seri', hint: 'Sporcunun iki serisi toplanır mı, yoksa yalnızca en yüksek serisi mi sayılır' },
     teamMinAthletes: { label: 'Takım için en az sporcu', hint: 'Kulüpte bu kadar sporcu yoksa takım listesine girmez' },
     teamPerRoutineMinAthletes: { label: 'Seri bazlı için en az sporcu', hint: 'Kulüpte bu kadar sporcu varsa seri bazlı hesaplanır' },
-    finalTeamSource: { label: 'Finalde takım kaynağı', hint: 'Final kategorisinde takım puanı eleme mi finalden mi hesaplanır' },
 };
 
 /**
@@ -205,9 +197,14 @@ export function resolveCategoryRules(rules, category) {
         scoringRule,
         routineCount: Number(pick('routineCount', flow.routineCount)) || flow.routineCount,
         hasDScore:    pick('hasDScore', flow.hasDScore) !== false,
-        // Senkron kategorilerde takım sıralaması yapılmaz. Kategoride açıkça
-        // aksi belirtilmediyse kapalıdır.
-        hasTeam:      pick('hasTeam', category?.type === 'sync' ? false : flow.hasTeam) !== false,
+        // Takım sıralaması yapılmayan kategoriler:
+        //   • Senkron kategoriler
+        //   • FİNAL kategorileri — takım elemede belirlenir, finalde tekrarlanmaz
+        // Kategoride açıkça aksi belirtilmediyse kapalıdır.
+        hasTeam: pick(
+            'hasTeam',
+            (category?.type === 'sync' || category?.isFinal) ? false : flow.hasTeam,
+        ) !== false,
         teamMode:     pick('teamMode', modeRule?.mode || flow.teamMode),
         teamTopN:
             Number(pick('teamTopN', resolveTeamTopN(category, flow))) || flow.teamTopN,
@@ -217,31 +214,21 @@ export function resolveCategoryRules(rules, category) {
         teamMinAthletes,
         teamPerRoutineMinAthletes:
             Number(pick('teamPerRoutineMinAthletes', perRoutineMin)) || flow.teamPerRoutineMinAthletes,
-        finalTeamSource: pick('finalTeamSource', flow.finalTeamSource) || 'qualification',
     };
 }
 
 /**
  * Takım sıralamasının hangi kategorinin puanlarından hesaplanacağını söyler.
  *
- * Normal (eleme) kategorilerde kategori kendisidir. FİNAL kategorilerinde
- * kulüp başına yalnızca 1-2 finalist kaldığı için finalin kendi puanlarıyla
- * takım kurulamaz; bu yüzden varsayılan olarak ELEME kategorisi kullanılır.
+ * Eleme kategorilerinde kaynak kategorinin kendisidir. FİNAL ve senkron
+ * kategorilerde takım sıralaması YAPILMAZ — null döner ve takım alanı
+ * ekranlarda hiç gösterilmez. Kategoride hasTeam açıkça açılmışsa o kazanır.
  *
  * @returns {object|null} kaynak kategori — takım gösterilmeyecekse null
  */
-export function resolveTeamSourceCategory(rules, category, categories) {
+export function resolveTeamSourceCategory(rules, category) {
     if (!category) return null;
-    if (!category.isFinal) return category;
-
-    const src = resolveCategoryRules(rules, category).finalTeamSource;
-    if (src === 'none')  return null;
-    if (src === 'final') return category;
-
-    // 'qualification' — üst (eleme) kategori. Bulunamazsa finalin kendisi.
-    const parentId = category.parentCategoryId;
-    const parent = parentId ? (categories?.[parentId] || null) : null;
-    return parent || category;
+    return resolveCategoryRules(rules, category).hasTeam ? category : null;
 }
 
 /**

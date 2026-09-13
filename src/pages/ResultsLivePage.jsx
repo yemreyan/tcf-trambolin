@@ -150,10 +150,11 @@ export default function ResultsLivePage() {
             }
             // Takımı açık kategorilerde bireysel sayfalardan sonra takım sayfası.
             // Boşsa (yeterli sporcusu olan kulüp yok) döngüye hiç eklenmez.
-            // Final kategorilerinde takım puanı ELEME kategorisinden gelir.
-            const srcCat = resolveTeamSourceCategory(rules, cat, categories);
+            // Takım sayfası yalnızca ELEME kategorilerinde döngüye girer;
+            // final ve senkron kategorilerde kaynak null gelir.
+            const srcCat = resolveTeamSourceCategory(rules, cat);
             const cr = srcCat ? resolveCategoryRules(rules, srcCat) : null;
-            if (srcCat && cr.hasTeam) {
+            if (srcCat) {
                 const teams = computeTeamRanking(computeRanking(srcCat), {
                     topN: cr.teamTopN,
                     minAthletes: cr.teamMinAthletes,
@@ -294,13 +295,12 @@ export default function ResultsLivePage() {
 
     const isTeamView = currentView?.kind === 'team';
     const ranking  = currentView ? computeRanking(currentView.cat) : [];
-    // Final kategorisinde takım kaynağı eleme kategorisidir.
-    const teamSrcCat   = currentView ? resolveTeamSourceCategory(rules, currentView.cat, categories) : null;
-    const teamFromQual = !!teamSrcCat && !!currentView && teamSrcCat.id !== currentView.cat.id;
+    // Takım yalnızca eleme kategorilerinde gösterilir.
+    const teamSrcCat = currentView ? resolveTeamSourceCategory(rules, currentView.cat) : null;
     const teamRows = (() => {
         if (!isTeamView || !teamSrcCat) return [];
         const cr = resolveCategoryRules(rules, teamSrcCat);
-        const all = computeTeamRanking(teamFromQual ? computeRanking(teamSrcCat) : ranking, {
+        const all = computeTeamRanking(ranking, {
             topN: cr.teamTopN,
             minAthletes: cr.teamMinAthletes,
             mode: cr.teamMode,
@@ -360,7 +360,7 @@ export default function ResultsLivePage() {
                                 <i className="material-icons-round" style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4, color: '#c084fc' }}>sync</i>
                             )}
                             {currentView.cat.name}
-                            {isTeamView && (teamFromQual ? ' — TAKIM (ELEME)' : ' — TAKIM')}
+                            {isTeamView && ' — TAKIM'}
                             {currentView.totalPages > 1 && ` — ${currentView.page + 1}/${currentView.totalPages}`}
                         </div>
                     )}
