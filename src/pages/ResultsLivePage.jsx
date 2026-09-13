@@ -322,17 +322,43 @@ export default function ResultsLivePage() {
     // Kimliği olmayan eski kayıtlar için ada göre eşleme yedeği var.
     const flashRank = useMemo(() => {
         if (!flash) return null;
-        const cat = flash.categoryId ? categories[flash.categoryId] : null;
-        const cats = cat ? [cat] : Object.values(categories);
-        for (const c of cats) {
+
+        const routineKey = flash.routine === 2 ? 'r2' : 'r1';
+        const matchesId = (r) => !!flash.athleteId &&
+            (r.a?.id === flash.athleteId || r.a?.uniqueId === flash.athleteId);
+        const matchesName = (r) =>
+            getAthleteName(r.a) === flash.athleteName || r.a?.pairName === flash.athleteName;
+        // Yayınlanan puanın bu kategoride gerçekten bu seriye düşmüş olması.
+        // Kimlik taşımayan eski yayınlarda doğru kategoriyi bu belirler.
+        const scoreHit = (r) => flash.total != null && r[routineKey] != null &&
+            Math.abs(r[routineKey] - flash.total) < 0.0005;
+
+        // Yayında kategori varsa önce o denenir, sonra diğerleri.
+        const named = flash.categoryId ? categories[flash.categoryId] : null;
+        const ordered = [
+            ...(named ? [named] : []),
+            ...Object.values(categories).filter(c => !named || c.id !== named.id),
+        ];
+
+        const adaylar = [];
+        for (const c of ordered) {
             const rows = computeRanking(c);
-            const hit = rows.find(r =>
-                (flash.athleteId && (r.a.id === flash.athleteId || r.a.uniqueId === flash.athleteId)) ||
-                (!flash.athleteId && getAthleteName(r.a) === flash.athleteName)
-            );
-            if (hit) return { rank: hit.rank, total: rows.filter(x => x.rank != null).length };
+            const total = rows.filter(x => x.rank != null).length;
+            // Kimlik eşleşmesi kesindir — finalist kaydının kimliği elemeninkinden
+            // farklı olduğu için yanlış kategoriye düşmez.
+            const byId = rows.find(matchesId);
+            if (byId) return { rank: byId.rank, total };
+            const byName = rows.find(matchesName);
+            if (byName) adaylar.push({ cat: c, row: byName, total, exact: scoreHit(byName) });
         }
-        return null;
+
+        if (adaylar.length === 0) return null;
+        // Ada göre eşleşmede: puanı tutan kategori > final kategorisi > ilk bulunan.
+        // Sporcu hem elemede hem finalde aynı adla bulunduğu için bu sıra şart.
+        const best = adaylar.find(x => x.exact)
+            || adaylar.find(x => x.cat.isFinal || String(x.cat.id).endsWith('_final'))
+            || adaylar[0];
+        return { rank: best.row.rank, total: best.total };
     }, [flash, categories, athletes, pairs, scores, rules]);
 
     return (
