@@ -20,6 +20,7 @@ const PasswordAdminPage = lazy(() => import('./pages/PasswordAdminPage'));
 const AdminToolsPage    = lazy(() => import('./pages/AdminToolsPage'));
 const JudgeAnalysisPage = lazy(() => import('./pages/JudgeAnalysisPage'));
 const SuperiorJuryPage  = lazy(() => import('./pages/SuperiorJuryPage'));
+const AwardsPage        = lazy(() => import('./pages/AwardsPage'));
 const RulesPage         = lazy(() => import('./pages/RulesPage'));
 
 // ── Yükleme Ekranı ────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ export default function App() {
                             <Route path="/scoreboard"        element={<ScoreboardPage />} />
                             <Route path="/results/live"      element={<ResultsLivePage />} />
                             <Route path="/results/final"     element={<ResultsFinalPage />} />
+                            <Route path="/awards"            element={<AwardsPage />} />
 
                             {/* Bilinmeyen rota → ana sayfa */}
                             <Route path="*" element={<Navigate to="/" replace />} />

@@ -149,6 +149,12 @@ export default function PanelPage() {
                         accentColor="#0ea5e9"
                     />
 
+                    <MenuCard
+                        icon="emoji_events" title="Dereceler" desc="Derece alan sporcular ve kulüpleri"
+                        onClick={() => navigate('/awards')}
+                        accentColor="#FFD700"
+                    />
+
                     <MenuCard icon="people" title="Jüri Yönetimi" desc="Hakem İsimlerini Ata" onClick={() => navigate('/jury')} />
                     <MenuCard icon="tv" title="Skorboard" desc="Seyirci ekranı (Projeksiyon)" onClick={() => window.open(`/scoreboard?comp=${compId}`, '_blank')} />
 
